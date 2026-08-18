@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# =====================================================================
+#  set-wallpaper <file>
+#
+#  Picks the backend by file type:
+#    still image (png/jpg/webp)   -> swaybg
+#    animated  (gif/mp4/webm/mkv) -> mpvpaper
+#
+#  For still images it swaps without a black flash: the new swaybg layer
+#  is started on top first, then the previous instances are killed. If a
+#  file is animated but mpvpaper is missing, the first frame is shown as a
+#  still, so there is never an empty desktop.
+#
+#  Used by Hyprism and by the Hyprland autostart.
+# =====================================================================
+set -u
+
+F="${1:-}"
+CACHE="$HOME/.cache/hyprism"
+mkdir -p "$CACHE"
+
+[ -n "$F" ] || { echo "usage: set-wallpaper <file>"; exit 1; }
+[ -f "$F" ] || { echo "file does not exist: $F"; exit 1; }
+
+have(){ command -v "$1" >/dev/null 2>&1; }
+
+# lowercase extension
+ext="${F##*.}"; ext="${ext,,}"
+
+is_animated=0
+case "$ext" in
+  gif|mp4|webm|mkv|mov|avi) is_animated=1 ;;
+esac
+
+start_static(){ # start_static <image>
+  setsid swaybg -i "$1" -m fill >/dev/null 2>&1 < /dev/null &
+}
+
+# Flicker-free swap: bring up the new swaybg layer, let it map, then remove the
+# instances that were running before. Overlapping the layers hides the black
+# gap the old "kill first, sleep, then start" had.
+swap_static(){ # swap_static <image>
+  local old p
+  old=$(pgrep -x swaybg 2>/dev/null | tr '\n' ' ')
+  start_static "$1"
+  sleep 0.25
+  for p in $old; do kill "$p" 2>/dev/null; done
+  pkill -x mpvpaper 2>/dev/null    # leave no animated wallpaper behind
+}
+
+stop_all(){
+  pkill -x swaybg   2>/dev/null
+  pkill -x mpvpaper 2>/dev/null
+  sleep 0.3
+}
+
+first_frame(){ # first_frame <video> -> path to a png
+  local out="$CACHE/frame-$(basename "$F" | tr -c '[:alnum:]._-' '_').png"
+  if [ ! -f "$out" ] || [ "$F" -nt "$out" ]; then
+    if have ffmpeg; then
+      ffmpeg -y -loglevel error -i "$1" -vframes 1 "$out" >/dev/null 2>&1
+    elif have magick; then
+      magick "$1[0]" "$out" >/dev/null 2>&1
+    fi
+  fi
+  [ -f "$out" ] && printf '%s' "$out"
+}
+
+if [ "$is_animated" -eq 1 ]; then
+  if have mpvpaper; then
+    stop_all
+    # panscan=1.0 fills the screen without bars; no audio, infinite loop.
+    # 'ALL' covers every monitor.
+    setsid mpvpaper -o "no-audio --loop-file=inf --panscan=1.0 --hwdec=auto" \
+      ALL "$F" >/dev/null 2>&1 < /dev/null &
+    echo "animated wallpaper: $(basename "$F")  (mpvpaper)"
+  else
+    frame=$(first_frame "$F")
+    if [ -n "${frame:-}" ]; then
+      swap_static "$frame"
+      echo "NOTE: 'mpvpaper' not installed — showing the first frame as a still."
+      echo "  To actually animate:  yay -S mpvpaper"
+    else
+      echo "ERROR: animated file and neither mpvpaper nor a way to extract the frame."
+      exit 1
+    fi
+  fi
+else
+  swap_static "$F"
+  echo "wallpaper: $(basename "$F")  (swaybg)"
+fi

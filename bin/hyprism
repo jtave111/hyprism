@@ -1,0 +1,2550 @@
+#!/usr/bin/env bash
+# =====================================================================
+#  Hyprism  -  one palette, the whole spectrum.
+#  A theming command center for Hyprland (Waybar, Hyprlock, Dunst,
+#  Kitty and Rofi) driven by a single palette + a central state file.
+#
+#  no arguments .......... open the full menu
+#  hyprism <palette> ..... apply a palette directly
+#  hyprism palette | wallpaper | appearance | effects | bar | style | modules
+#  hyprism windows | workspaces | animations | input | cursor
+#  hyprism effects [performance|subtle|glass|focus]
+#  hyprism animations [off|fast|balanced|smooth|elastic]
+#  hyprism style [flat|pills|segmented]
+#  hyprism lock | notifications
+#  hyprism font | binds | preset | config
+#  hyprism lang [en|pt] ... switch the interface language
+#  hyprism sync .......... reapply the global theme to Kitty and Rofi
+#  hyprism -l list   -r random   -g regenerate palettes   -h help
+#
+#  How it works: every choice becomes a knob in two generated files —
+#    ~/.config/hypr/colors.lua  (colors)
+#    ~/.config/hypr/look.lua    (numbers and behavior)
+#  hyprland.lua reads both. Customizing never rewrites your config.
+#
+#  Palettes: generated from kitty themes (same source as rofitheme),
+#  plus 'sddm-terminal-red', taken from your login theme.
+#  Consumers: Hyprland, Waybar, Hyprlock and Dunst.
+#
+#  Bilingual (English/Portuguese): hyprism lang en|pt
+# =====================================================================
+set -u
+HD="$HOME/.config/hypr"
+TD="$HD/themes"
+PAL="$TD/palettes"
+PRESETS="$TD/presets"
+STATE="$TD/.active"
+SET="$TD/.state"
+COLORS="$HD/colors.lua"
+LOOK="$HD/look.lua"
+WALLFILE="$HD/wallpaper"
+WBAR="$HOME/.config/waybar"
+KTD="$HOME/.config/kitty/themes"
+WALLDIR="$HOME/Pictures/wallpaper"
+WALLCACHE="$HOME/.cache/hyprism/live-wallpaper"
+SELF="$(command -v hyprism 2>/dev/null || command -v hyprtheme 2>/dev/null || printf '%s' "$0")"
+THUMBS="$HOME/.cache/hyprism/thumbs"
+mkdir -p "$PAL" "$PRESETS" "$WBAR" "$WALLCACHE" "$THUMBS"
+
+have(){ command -v "$1" >/dev/null 2>&1; }
+
+FZF(){ fzf --height=92% --layout=reverse --border=rounded --info=inline-right --ansi --no-separator \
+  --margin=1 --padding=1 --gap=1 --pointer='▸' --marker='✓' --scrollbar='│' \
+  --color='bg:-1,bg+:#1b1111,fg:#b8b8b8,fg+:#ffffff,hl:#ff4a4a,hl+:#ff6a6a:bold,pointer:#ff2b2b,prompt:#ff2b2b:bold,marker:#ff6a6a,info:#666666,header:#888888,border:#5a0000,gutter:-1' \
+  "$@"; }
+
+# Menu/option variant: lines are "KEY<TAB>LABEL"; only the translated LABEL is
+# shown and searched, while the canonical KEY (a menu route or a state value)
+# stays hidden and untouched. This keeps every dispatch and every value written
+# to .state language-independent while the interface is fully translated.
+FZFM(){ FZF --delimiter='\t' --with-nth='2..' "$@"; }
+row(){ printf '%s\t%s\n' "$1" "$2"; }
+mkey(){ printf '%s' "${1%%$'\t'*}"; }   # canonical KEY from a selected line
+
+# ---------- personality / colored output ----------
+# Honors NO_COLOR and only paints when stdout is a terminal.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  C_RST=$'\033[0m'; C_B=$'\033[1m'; C_DIM=$'\033[2m'
+  C_RED=$'\033[38;5;203m'; C_GRN=$'\033[38;5;114m'; C_YEL=$'\033[38;5;179m'
+  C_ACC=$'\033[38;5;211m'; C_GREY=$'\033[38;5;245m'
+else
+  C_RST=''; C_B=''; C_DIM=''; C_RED=''; C_GRN=''; C_YEL=''; C_ACC=''; C_GREY=''
+fi
+ok(){   printf '  %s✓%s %s\n' "$C_GRN" "$C_RST" "$*"; }
+info(){ printf '  %s▸%s %s\n' "$C_ACC" "$C_RST" "$*"; }
+warn(){ printf '  %s!%s %s\n' "$C_YEL" "$C_RST" "$*"; }
+err(){  printf '  %s✗%s %s\n' "$C_RED" "$C_RST" "$*" >&2; }
+say(){  printf '  %s%s%s\n'   "$C_GREY" "$*" "$C_RST"; }
+
+# ---------- i18n (English base, optional Portuguese) ----------
+# t 'English source' -> Portuguese when lang=pt and a translation exists,
+# otherwise the English source itself (graceful fallback). Command keywords
+# and .state values are never translated; only human-readable text is.
+LANGX=en
+declare -A PT
+t(){ if [ "$LANGX" = pt ] && [ -n "${PT[$1]+x}" ]; then printf '%s' "${PT[$1]}"; else printf '%s' "$1"; fi; }
+# Portuguese catalog. Populated only when lang=pt. Any key not present
+# here gracefully falls back to its English source string.
+load_pt(){ PT=(
+  ['a bit darker']='um pouco mais escuro'
+  ['a bit lighter']='um pouco mais claro'
+  ['accent']='acento'
+  ['accent color']='cor do acento'
+  ['accessible']='acessivel'
+  ['active']='ativa'
+  ['active border']='borda ativa'
+  ['active window']='janela ativa'
+  ['advanced blur']='blur avancado'
+  ['advanced shadow']='sombra avancada'
+  ['after 10 seconds']='depois de 10 segundos'
+  ['after 2 seconds']='depois de 2 segundos'
+  ['after 30 seconds']='depois de 30 segundos'
+  ['after 5 seconds']='depois de 5 segundos'
+  ['airy']='arejado'
+  ['allow overlapping edges']='permite sobrepor as bordas'
+  ['all values are applied by Hyprland']='todos os valores sao aplicados pelo Hyprland'
+  ['almost opaque']='quase opaca'
+  ['almost square']='quase quadrado'
+  ['also on the lock screen']='tambem na tela de bloqueio'
+  ['always keep border and gaps']='manter borda e gaps sempre'
+  ['amber']='ambar'
+  ['an 80% floor keeps things readable']='um limite de 80% preserva a legibilidade'
+  ['animated']='animado'
+  ['animation follows numeric order']='animacao segue a ordem numerica'
+  ['animations']='animacoes'
+  ['appearance']='aparencia'
+  ['app icons']='icones de aplicativos'
+  ['apply a palette directly']='aplica uma paleta direto'
+  ['apply a saved preset']='aplicar um preset salvo'
+  ['apps may bring their window forward']='apps podem trazer a janela para frente'
+  ['apps may request focus']='apps podem pedir foco'
+  ['a ready, safe profile']='um perfil pronto e seguro'
+  ['arrows preview live · ENTER apply · ESC restore · Ctrl-S shuffle · Alt-O folder']='SETAS mostram ao vivo · ENTER aplica · ESC restaura · Ctrl-S embaralha · Alt-O pasta'
+  ['arrows show on screen · ENTER apply']='SETAS mostram na tela · ENTER aplica'
+  ['arrows show on screen · ENTER apply · ESC restore']='SETAS mostram na tela · ENTER aplica · ESC restaura'
+  ['a tap equals a click']='tocar equivale a clicar'
+  ['at the bottom']='embaixo'
+  ['at the top']='em cima'
+  ['avoids accidental taps while typing']='evita toques acidentais ao digitar'
+  ['back']='voltar'
+  ['back-and-forth']='retorno'
+  ['background blur']='desfoque do fundo'
+  ['background brightness']='brilho do fundo'
+  ['background, clock and cursor of hyprlock']='fundo, relogio e cursor do hyprlock'
+  ['back to previous area']='voltar para a area anterior'
+  ['balanced']='equilibrado'
+  ['balanced — fluid without lagging the UI']='equilibrada — fluida sem atrasar a interface'
+  ['bar']='barra'
+  ['bar font']='fonte da barra'
+  ['bar height']='altura da barra'
+  ['bar / highlight']='barra / realce'
+  ['bar look: flat / pills / segmented + tuning']='visual da barra: flat / pills / segmentada + ajustes'
+  ['bar modules']='modulos da barra'
+  ['bar off — run: hyprism bar']='barra desligada — use: hyprism bar'
+  ['bar profile']='perfil da barra'
+  ['bar style']='estilo da barra'
+  ['battery']='bateria'
+  ['below']='abaixo'
+  ['below, discreet']='abaixo, discreta'
+  ['between areas']='entre as areas'
+  ['beveled']='chanfrado'
+  ['black']='preto'
+  ['blur behind windows']='desfoque atras das janelas'
+  ['blur brightness']='brilho do blur'
+  ['blur, shadow, opacity and focus']='blur, sombra, opacidade e foco'
+  ['blur, shadow, transparency and focus; no experimental shaders']='blur, sombra, transparencia e foco; sem shaders experimentais'
+  ['blur vibrancy']='vibrancia do blur'
+  ['border']='borda'
+  ['border, corner shape and breathing room between windows']='borda, formato dos cantos e respiro entre janelas'
+  ['border width, corners and spacing']='espessura da borda, cantos e espacamento'
+  ['bottom center']='inferior centro'
+  ['bottom left']='inferior esquerda'
+  ['bottom right']='inferior direita'
+  ['brick red']='vermelho tijolo'
+  ['brightness']='brilho'
+  ['bright red']='vermelho vivo'
+  ['capsule']='capsula'
+  ['center']='centralizar'
+  ['centered']='centralizada'
+  ['choose minimal, balanced or full']='escolher minimo, equilibrado ou completo'
+  ['circular (default)']='circular (padrao)'
+  ['clickable Wi-Fi']='Wi-Fi clicavel'
+  ['clock']='relogio'
+  ['close']='fechar'
+  ['color']='cor'
+  ['compact']='compacto'
+  ['compact (default)']='compacto (padrao)'
+  ['complete presets: windows, fade, layers and workspaces']='presets completos: janelas, fade, camadas e workspaces'
+  ['content follows the fingers']='conteudo acompanha os dedos'
+  ['corner radius']='raio dos cantos'
+  ['corners']='cantos'
+  ['corner shape']='formato dos cantos'
+  ['could not build the thumbnail']='nao consegui gerar a miniatura'
+  ['count']='quantidade'
+  ['count, rules, layout and navigation']='quantidade, regras, layout e navegacao'
+  ['cursor']='cursor'
+  ['cursor always visible']='cursor sempre visivel'
+  ['cursor on lock']='cursor no bloqueio'
+  ['cursor size']='tamanho do cursor'
+  ['cursor theme']='tema do cursor'
+  ['customizes hyprlock without changing your password']='personaliza o hyprlock sem alterar sua senha'
+  ['cyan']='ciano'
+  ['dark']='escuro'
+  ['darker']='mais escuro'
+  ['dark gray']='cinza escuro'
+  ['dark red']='vermelho escuro'
+  ['default']='padrao'
+  ['default (SUPER+1..9)']='padrao (SUPER+1..9)'
+  ['dim']='dim'
+  ['dim inactive']='escurecer inativas'
+  ['dim strength (%)']='forca do escurecimento (%)'
+  ['dim text']='texto apagado'
+  ['disable while typing']='desativar ao digitar'
+  ['discreet']='discreto'
+  ['disk usage']='uso do disco'
+  ['does not exist']='nao existe'
+  ['does not exist — try hyprism -l']='nao existe — tente hyprism -l'
+  ['do not dim inactive windows']='nao escurecer janelas inativas'
+  ['dragging the border resizes']='arrastar a borda redimensiona'
+  ['drop border and gaps with a single tiled window']='remover borda e gaps com uma unica janela em mosaico'
+  ['dunst appearance; critical alerts never auto-dismiss']='aparencia do dunst; alertas criticos nao somem sozinhos'
+  ['duration']='duracao'
+  ['dynamic tree everywhere']='arvore dinamica em todas as areas'
+  ['easier to snap']='mais facil de encaixar'
+  ['edges only touch']='bordas apenas se encostam'
+  ['effects']='efeitos'
+  ['effects preset']='preset de efeitos'
+  ['elastic — windows and workspaces with a damped spring']='elastica — janelas e workspaces com spring amortecido'
+  ['empty areas disappear']='areas vazias somem'
+  ['English']='English'
+  ['ENTER applies to Hyprland, Waybar, Hyprlock and Dunst']='ENTER aplica em Hyprland, Waybar, Hyprlock e Dunst'
+  ['ENTER toggles the item; applied instantly']='ENTER alterna o item; aplicado na hora'
+  ['every module, including the tray']='todos os modulos, inclusive a bandeja'
+  ['everything opaque, no blur or shadow']='tudo opaco, sem blur nem sombra'
+  ['exit the session']='sair da sessao'
+  ['failed to sync Kitty']='falha ao sincronizar o Kitty'
+  ['failed to sync Rofi']='falha ao sincronizar o Rofi'
+  ['family and size of the bar']='familia e tamanho da barra'
+  ['fast']='rapida'
+  ['faster']='mais rapida'
+  ['fast — short and responsive']='rapida — curta e responsiva'
+  ['file']='arquivo'
+  ['files']='arquivos'
+  ['fingers to switch area']='dedos para trocar de area'
+  ['flat — attached, minimal (default)']='flat — colada, minimalista (padrao)'
+  ['floating']='flutuante'
+  ['floating, free control like KDE']='flutuante, controle livre como no KDE'
+  ['focus']='foco'
+  ['focus changes on click']='foco muda ao clicar'
+  ['focus follows the pointer (current/recommended)']='foco segue o ponteiro (atual/recomendado)'
+  ['focus request']='pedido de foco'
+  ['folder not found']='pasta nao encontrada'
+  ['follow the general window layout']='seguir o layout geral das janelas'
+  ['font']='fonte'
+  ['for tiled windows']='para janelas em mosaico'
+  ['four fingers']='quatro dedos'
+  ['full']='cheia'
+  ['full screen']='tela inteira'
+  ['fullscreen']='tela-cheia'
+  ['fully free movement']='movimento totalmente livre'
+  ['fully round']='totalmente redondo'
+  ['gap']='espaco'
+  ['gap between modules']='espaco entre os modulos'
+  ['gap between workspaces']='distancia entre workspaces'
+  ['gaps']='gaps'
+  ['gaps inner/outer']='gaps dentro/fora'
+  ['gesture fingers']='dedos no gesto'
+  ['gestures']='gestos'
+  ['global palette']='paleta global'
+  ['global theme']='tema global'
+  ['green']='verde'
+  ['height, position and font of the bar']='altura, posicao e fonte da barra'
+  ['hide after']='esconder apos'
+  ['hide on the locked screen']='esconder na tela bloqueada'
+  ['hide the cursor']='esconder o cursor'
+  ['hide until the mouse moves']='esconde ate mover o mouse'
+  ['hide while typing']='esconder ao digitar'
+  ['higher power makes the arc more square']='potencia maior deixa o arco mais quadrado'
+  ['highlight']='realce'
+  ['highlight the focused window']='realcar a janela focada'
+  ['Hyprism — one palette, the whole spectrum.']='Hyprism — uma paleta, o espectro inteiro.'
+  ['Hyprism · personalization center']='Hyprism · central de personalizacao'
+  ['Hyprland has no active global theme']='o Hyprland nao tem tema global ativo'
+  ['icons']='icones'
+  ['idle']='inativo'
+  ['idle time']='tempo inativo'
+  ['inactive']='inativa'
+  ['inactive border']='borda inativa'
+  ['inactive window']='janela inativa'
+  ['includes SUPER+0']='inclui SUPER+0'
+  ['inner']='dentro'
+  ['install fzf for the menu, or use: hyprism <palette>']='instale o fzf para o menu, ou use: hyprism <paleta>'
+  ['intense']='intensa'
+  ['intensity']='intensidade'
+  ['interface language (English / Portuguese)']='idioma da interface (Ingles / Portugues)'
+  ['invalid language (use en or pt)']='idioma invalido (use en ou pt)'
+  ['invalid preset']='preset invalido'
+  ['invalid style (use flat, pills or segmented)']='estilo invalido (use flat, pills ou segmented)'
+  ['keep all numbered areas']='manter todas as areas numeradas'
+  ['keep current']='manter atual'
+  ['keep it visible']='manter visivel'
+  ['keeps the chosen split']='mantem a divisao escolhida'
+  ['keyboard']='teclado'
+  ['keyboard language']='idioma do teclado'
+  ['keyboard layout']='layout do teclado'
+  ['keyboard, mouse and touchpad']='teclado, mouse e touchpad'
+  ['keyboard, mouse, touchpad and gestures']='teclado, mouse, touchpad e gestos'
+  ['kittytheme not found; Kitty was not changed']='kittytheme nao encontrado; Kitty nao foi alterado'
+  ['language']='idioma'
+  ['large']='grande'
+  ['LAUNCH']='LANCAR'
+  ['launcher (rofi)']='launcher (rofi)'
+  ['layout']='layout'
+  ['left and below']='esquerda e abaixo'
+  ['light']='claro'
+  ['light accent']='acento claro'
+  ['light and cheap']='leve e economico'
+  ['light blur and dimmed inactive windows']='blur leve e inativas escurecidas'
+  ['lighter']='mais claro'
+  ['light red']='vermelho claro'
+  ['light shadow and inactive at 96%']='sombra leve e inativas a 96%'
+  ['limit blur to normal surfaces (default)']='limita o blur a superficie normal (padrao)'
+  ['list, random, regenerate palettes, help']='lista, aleatorio, regera paletas, ajuda'
+  ['lock']='bloqueio'
+  ['lock screen']='tela de bloqueio'
+  ['long']='longa'
+  ['magnetic snapping']='encaixe magnetico'
+  ['margin']='margem'
+  ['marked']='marcada'
+  ['maximize (respects the bar)']='maximizar (respeita a barra)'
+  ['medium']='media'
+  ['medium gray']='cinza medio'
+  ['minimal']='minimo'
+  ['mode']='modo'
+  ['moderate blur and readable transparency']='blur moderado e transparencia legivel'
+  ['mostly visible during the transition']='aparece principalmente durante a transicao'
+  ['mouse']='mouse'
+  ['mouse focus']='foco do mouse'
+  ['mouse mode']='modo do mouse'
+  ['move']='mover'
+  ['move the window']='mover a janela'
+  ['mpvpaper missing: it will stay a still frame']='mpvpaper ausente: vai ficar parado'
+  ['much darker']='bem mais escuro'
+  ['much lighter']='bem mais claro'
+  ['natural']='natural'
+  ['natural/inverted scrolling']='rolagem natural/invertida'
+  ['natural mouse scroll']='rolagem natural do mouse'
+  ['natural touchpad scroll']='rolagem natural do touchpad'
+  ['neutral']='neutro'
+  ['never']='nunca'
+  ['never hide']='nunca esconder'
+  ['new window']='janela nova'
+  ['no bar']='sem barra'
+  ['no blur']='sem desfoque'
+  ['no border']='sem borda'
+  ['no extra space']='sem espaco extra'
+  ['no gaps']='sem gaps'
+  ['no image viewer: inside kitty the image shows on its own; otherwise install chafa']='sem visualizador: no kitty a imagem aparece sozinha; fora dele, instale o chafa'
+  ['no palette']='sem paleta'
+  ['normal']='normal'
+  ['normal text']='texto normal'
+  ['no shadow']='sem sombra'
+  ['note']='aviso'
+  ['notifications']='notificacoes'
+  ['now playing']='tocando agora'
+  ['numbered areas']='areas numeradas'
+  ['number of areas']='quantidade de areas'
+  ['off — no animations']='desligada — sem animacoes'
+  ['offset']='deslocamento'
+  ['offset x,y']='deslocamento x,y'
+  ['of the wallpaper']='do wallpaper'
+  ['one master window']='uma janela principal'
+  ['one master window everywhere']='uma janela principal em todas as areas'
+  ['only SUPER + right button']='somente SUPER + botao direito'
+  ['opacity']='opacidade'
+  ['opacity percentage']='opacidade em porcentagem'
+  ['opaque']='opaca'
+  ['open hyprlock now']='abrir hyprlock agora'
+  ['opening']='abertura'
+  ['opening, focus, snapping and tiling options']='opcoes de abertura, foco, encaixe e mosaico'
+  ['opening, layout, snapping and focus']='abertura, layout, encaixe e foco'
+  ['opening size']='tamanho de abertura'
+  ['open the full menu']='abre o menu completo'
+  ['open windows']='janelas abertas'
+  ['orange']='laranja'
+  ['original']='original'
+  ['original color']='cor original'
+  ['outer']='fora'
+  ['outer margin']='margem externa'
+  ['overlap']='sobrepor'
+  ['overlap on snap']='sobrepor bordas no encaixe'
+  ['palette']='paleta'
+  ['palette accent']='acento da paleta'
+  ['palette line']='linha da paleta'
+  ['palettes in']='paletas em'
+  ['passes']='passagens'
+  ['pass through transparent surfaces']='atravessa superficies transparentes'
+  ['password']='senha'
+  ['persistent']='persistentes'
+  ['persistent areas']='areas persistentes'
+  ['phosphor green']='verde fosforo'
+  ['pills — floating, one rounded chip per module']='pills — flutuante, um chip arredondado por modulo'
+  ['pointer and keyboard separate; click gives focus']='ponteiro e teclado separados; clique da foco'
+  ['Portuguese Brazil, no dead keys']='Portugues Brasil, sem teclas mortas'
+  ['Portuguese Brazil, ThinkPad']='Portugues Brasil, ThinkPad'
+  ['position']='posicao'
+  ['position, size, timeout and icons']='posicao, tamanho, tempo e icones'
+  ['power']='potencia'
+  ['preserve split']='preservar divisao'
+  ['preserve the tiling split']='preservar a divisao do mosaico'
+  ['preset']='preset'
+  ['preset applied']='preset aplicado'
+  ['preset name']='nome do preset'
+  ['presets']='presets'
+  ['presets for windows, layers and workspaces']='presets de janelas, camadas e workspaces'
+  ['prevents focus stealing (recommended)']='evita roubo de foco (recomendado)'
+  ['prevent sleep']='impedir suspensao'
+  ['processor usage']='uso do processador'
+  ['propagated: Hyprland → Kitty + Rofi']='propagado: Hyprland → Kitty + Rofi'
+  ['propagate the global theme to Kitty and Rofi']='propagar o tema global para Kitty e Rofi'
+  ['purple']='roxo'
+  ['quick']='rapida'
+  ['quit']='sair'
+  ['radius']='raio'
+  ['RAM']='memoria RAM'
+  ['range']='alcance'
+  ['range/power']='alcance/potencia'
+  ['reapplied']='reaplicado'
+  ['reapply the global theme to Kitty and Rofi']='reaplicar o tema global para Kitty e Rofi'
+  ['recommended']='recomendado'
+  ['recomputes with the size']='recalcula conforme o tamanho'
+  ['repeating keeps the current area']='repetir mantem a area atual'
+  ['repeat the shortcut returns to the previous area']='repetir o atalho volta para a area anterior'
+  ['requires pressing the touchpad']='exige pressionar o touchpad'
+  ['resize']='redimensionar'
+  ['resize from the border']='redimensionar pela borda'
+  ['resize on border']='redimensionar na borda'
+  ['resize with the mouse']='redimensionar com o mouse'
+  ['resolution']='resolucao'
+  ['respect configured gaps']='respeitar os gaps configurados'
+  ['respect gaps']='respeitar gaps'
+  ['right and below']='direita e abaixo'
+  ['rofitheme not found; Rofi was not changed']='rofitheme nao encontrado; Rofi nao foi alterado'
+  ['rounded']='arredondado'
+  ['rules, shortcuts and workspace behavior']='regras, atalhos e comportamento dos workspaces'
+  ['run a command']='rodar um comando'
+  ['safe floor']='limite seguro'
+  ['saved']='salvo'
+  ['save or load a whole look']='salvar ou carregar um visual inteiro'
+  ['save the current look under a name']='guardar o visual atual com um nome'
+  ['scale']='escala'
+  ['screen brightness']='brilho da tela'
+  ['screenshot region']='recortar tela'
+  ['scrolling columns']='colunas que rolam'
+  ['scrolling columns everywhere']='colunas rolaveis em todas as areas'
+  ['search button']='botao de pesquisa'
+  ['see everything active']='ver tudo que esta ativo'
+  ['see the keybinding list']='ver a lista de teclas'
+  ['segmented — attached, rounded module clusters']='segmentada — colada, grupos arredondados'
+  ['selected item']='item selecionado'
+  ['selection']='selecao'
+  ['send a sample notification']='enviar notificacao de exemplo'
+  ['sens']='sens'
+  ['sensitivity']='sensibilidade'
+  ['session menu']='menu de sessao'
+  ['shadow']='sombra'
+  ['shadow cfg']='sombra cfg'
+  ['shadow scale']='escala da sombra'
+  ['shadow under windows']='sombra sob as janelas'
+  ['short']='curta'
+  ['shortest visual path at the ends']='caminho visual mais curto nas pontas'
+  ['show the app icon']='mostrar o icone do aplicativo'
+  ['show time and date']='mostrar hora e data'
+  ['sim = floating; nao = tiling']='sim = flutuante; nao = mosaico'
+  ['size']='tamanho'
+  ['size/passes']='tamanho/passagens'
+  ['slightly dark']='levemente escuro'
+  ['slow']='lenta'
+  ['slower']='mais lenta'
+  ['small']='pequeno'
+  ['smaller']='menor'
+  ['smooth — longer transitions']='suave — transicoes mais longas'
+  ['snap']='encaixe'
+  ['snap distance']='distancia do encaixe'
+  ['snapping']='encaixe'
+  ['snap to half the screen']='encaixar em metade da tela'
+  ['snap to the real edge']='encaixar ate a borda real'
+  ['soft']='suave'
+  ['soft glass']='vidro suave'
+  ['source']='origem'
+  ['spacing']='espacamento'
+  ['spacious']='espacoso'
+  ['speed']='velocidade'
+  ['square']='quadrado'
+  ['squircle']='squircle'
+  ['state']='estado'
+  ['sticks to edges and other windows']='gruda em bordas e outras janelas'
+  ['strength']='forca'
+  ['strong']='forte'
+  ['style']='estilo'
+  ['super fast']='muito rapida'
+  ['switch (and 0 when a tenth exists)']='trocar (e 0 quando houver a decima)'
+  ['switch the interface language']='trocar o idioma da interface'
+  ['SYSTEM']='SISTEMA'
+  ['tall']='alta'
+  ['tap']='toque'
+  ['tap to click']='tocar para clicar'
+  ['temperature']='temperatura'
+  ['terminal']='terminal'
+  ['test']='testar'
+  ['text']='texto'
+  ['the colors (Hyprland, Waybar, Hyprlock, Dunst)']='as cores (Hyprland, Waybar, Hyprlock, Dunst)'
+  ['the current look, without tray icons']='o visual atual, sem icones de bandeja'
+  ['theme']='tema'
+  ['theme and size change live; some apps need a restart']='tema e tamanho mudam ao vivo; alguns apps exigem reinicio'
+  ['theme, size and when to hide']='tema, tamanho e quando esconder'
+  ['the overall look of the bar; colors follow the active palette']='o visual geral da barra; as cores seguem a paleta ativa'
+  ['the palette color (default)']='a cor da paleta (padrao)'
+  ['the whole interface, either language']='a interface inteira, em qualquer idioma'
+  ['thick']='grossa'
+  ['thin']='fina'
+  ['thin (recommended)']='fina (recomendado)'
+  ['This is how your notifications will look.']='Assim vao aparecer suas notificacoes.'
+  ['three fingers']='tres dedos'
+  ['tiling, Hyprland arranges']='mosaico, o Hyprland organiza'
+  ['timeout']='tempo'
+  ['title and text only']='somente titulo e texto'
+  ['toggle floating/tiled']='alternar flutuante/encaixada'
+  ['top center']='superior centro'
+  ['top left']='superior esquerda'
+  ['top right']='superior direita'
+  ['touchpad']='touchpad'
+  ['touchpad always active']='touchpad sempre ativo'
+  ['touchpad speed']='velocidade do touchpad'
+  ['touchpad while typing']='touchpad ao digitar'
+  ['touch-tap']='touch-toque'
+  ['touch-typing']='touch-digitar'
+  ['traditional scrolling']='rolagem tradicional'
+  ['translucent']='translucida'
+  ['transparent']='transparente'
+  ['tree tiling']='mosaico em arvore'
+  ['type']='tipo'
+  ['typing']='digitar'
+  ['unknown option or palette']='opcao ou paleta invalida'
+  ['US English, international']='Ingles EUA, internacional'
+  ['US English, international AltGr']='Ingles EUA, internacional AltGr'
+  ['use off, fast, balanced, smooth or elastic']='use off, fast, balanced, smooth ou elastic'
+  ['use performance, subtle, glass or focus']='use performance, subtle, glass ou focus'
+  ['user and password only']='somente usuario e senha'
+  ['values kept within GPU-safe ranges']='valores limitados a faixas seguras para a GPU'
+  ['very close']='bem perto'
+  ['very dark']='bem escuro'
+  ['very fast']='bem rapida'
+  ['very large']='muito grande'
+  ['very light']='bem claro'
+  ['very long']='bem longa'
+  ['very round']='bem redondo'
+  ['very slow']='bem lenta'
+  ['very spacious']='muito espacoso'
+  ['very strong']='bem forte'
+  ['very wide']='bem larga'
+  ['vibrancy']='vibrancia'
+  ['visible']='visivel'
+  ['vivid']='viva'
+  ['volume']='volume'
+  ['wallpaper']='wallpaper'
+  ['wallpaper, with a terminal preview']='papel de parede, com previa no terminal'
+  ['what appears on the bar, item by item']='o que aparece na barra, item por item'
+  ['wheel']='roda'
+  ['wheel speed']='velocidade da roda'
+  ['when opening floating']='ao abrir flutuante'
+  ['while typing']='ao digitar'
+  ['white']='branco'
+  ['wide']='larga'
+  ['width']='largura'
+  ['WINDOW']='JANELA'
+  ['window behavior']='comportamento das janelas'
+  ['window border color']='cor da borda das janelas'
+  ['window border width']='espessura da borda da janela'
+  ['window size']='tamanho da janela'
+  ['window, sound, network, battery and clock']='janela, som, rede, bateria e relogio'
+  ['window title']='titulo da janela'
+  ['workspace layout']='layout das areas'
+  ['workspaces']='workspaces'
+  ['WORKSPACES']='AREAS DE TRABALHO'
+  ['wrap']='circular'
+  ['wrap transition']='transicao circular'
+  ['wrong password']='senha incorreta'
+); }
+lang_init(){ LANGX=$(sget lang); case "$LANGX" in pt|en) ;; *) LANGX=en ;; esac
+  [ "$LANGX" = pt ] && declare -F load_pt >/dev/null && load_pt; return 0; }
+
+usage(){
+  printf '%s\n' "$(t 'Hyprism — one palette, the whole spectrum.')"
+  printf '\n'
+  printf '  hyprism                 %s\n' "$(t 'open the full menu')"
+  printf '  hyprism <palette>       %s\n' "$(t 'apply a palette directly')"
+  printf '  hyprism palette|wallpaper|appearance|effects|bar|style|modules\n'
+  printf '  hyprism windows|workspaces|animations|input|cursor\n'
+  printf '  hyprism lock|notifications|font|binds|preset|config\n'
+  printf '  hyprism style [flat|pills|segmented]\n'
+  printf '  hyprism lang [en|pt]    %s\n' "$(t 'switch the interface language')"
+  printf '  hyprism sync            %s\n' "$(t 'reapply the global theme to Kitty and Rofi')"
+  printf '  hyprism -l  -r  -g  -h   %s\n' "$(t 'list, random, regenerate palettes, help')"
+}
+
+# ---------- state ----------
+sget(){ grep -m1 "^$1=" "$SET" 2>/dev/null | cut -d= -f2-; }
+sset(){ local k="$1" v="$2"; touch "$SET"
+  if grep -q "^$k=" "$SET" 2>/dev/null; then
+    sed -i "s|^$k=.*|$k=$v|" "$SET"
+  else printf '%s=%s\n' "$k" "$v" >> "$SET"; fi; }
+def(){ [ -z "$(sget "$1")" ] && sset "$1" "$2"; return 0; }
+seed(){
+  def border 1;         def rounding 0;    def rounding_power 2.0
+  def gaps_in 2;        def gaps_out 4
+  def blur off;         def blur_size 6;   def blur_passes 2
+  def blur_xray nao;    def blur_brightness 1.0; def blur_vibrancy 0.17
+  def shadow off;       def shadow_range 14; def shadow_power 3
+  def shadow_scale 1.0; def shadow_offset_x 0; def shadow_offset_y 2
+  def active_op 100;    def inactive_op 100; def fullscreen_op 100
+  def dim_inactive nao; def dim_strength 10
+  def anim rapida
+  def float_all sim;    def win_size "50% 50%"
+  def layout dwindle;   def snap sim;      def snap_gap 10
+  def snap_overlap nao; def snap_respect_gaps sim
+  def resize_border sim; def focus_activate nao; def preserve_split sim
+  def workspace_count 9; def workspace_persistent nao
+  def workspace_smart_gaps nao; def workspace_layout global
+  def workspace_gap 0;  def workspace_wrap nao; def workspace_backforth sim
+  def bar_enabled on;   def barh 26;       def barpos bottom
+  def barfont "FiraCode Nerd Font Mono"; def barsize 12
+  def bar_style flat;   def bar_margin 0;  def bar_radius 0;  def bar_gap 0
+  def lang en
+  def kb_layout br;     def kb_variant thinkpad
+  def follow_mouse 1;   def mouse_sensitivity 0; def mouse_scroll 1.0
+  def mouse_natural nao
+  def touch_natural sim; def touch_tap sim; def touch_dwt sim
+  def touch_scroll 1.0; def gesture_fingers 3
+  def cursor_theme aosp-cursors; def cursor_size 24
+  def cursor_hide_key nao; def cursor_timeout 0
+  def lock_blur 3;      def lock_brightness 50
+  def lock_clock sim;   def lock_hide_cursor sim
+  def notif_position top-right; def notif_width 360
+  def notif_timeout 8;  def notif_icons sim
+
+  # Migrate names used by the old version without losing the choice. An
+  # unknown value never reaches Lua: it falls back to the fast, safe preset.
+  case "$(sget anim)" in
+    rapido)  sset anim rapida ;;
+    nenhuma) sset anim desligada ;;
+    rapida|equilibrada|suave|elastica|desligada) ;;
+    *) sset anim rapida ;;
+  esac
+
+  # Current bar modules. The first two stay off to preserve the look without
+  # a launcher/workspace number, as requested.
+  def bar_launcher off; def bar_workspaces off; def bar_window on
+  def bar_media on;     def bar_language on;     def bar_idle on
+  def bar_temperature on; def bar_disk on;       def bar_memory on
+  def bar_cpu on;       def bar_backlight on;    def bar_audio on
+  def bar_network on;   def bar_tray off;        def bar_battery on
+  def bar_clock on;     def bar_power on
+  return 0
+}
+
+# ---------- color ----------
+rgb(){ local h="${1#\#}"; printf '%d %d %d' "0x${h:0:2}" "0x${h:2:2}" "0x${h:4:2}"; }
+mix(){ local ar ag ab br bg bb p="$3"
+  read -r ar ag ab <<<"$(rgb "$1")"; read -r br bg bb <<<"$(rgb "$2")"
+  printf '#%02x%02x%02x' $(( (ar*p + br*(100-p))/100 )) \
+                         $(( (ag*p + bg*(100-p))/100 )) \
+                         $(( (ab*p + bb*(100-p))/100 )); }
+is_dark(){ local r g b; read -r r g b <<<"$(rgb "$1")"
+  [ $(( (r*299 + g*587 + b*114)/1000 )) -lt 128 ]; }
+afg(){ local r g b; read -r r g b <<<"$(rgb "$1")"; printf '\033[38;2;%d;%d;%dm' "$r" "$g" "$b"; }
+abg(){ local r g b; read -r r g b <<<"$(rgb "$1")"; printf '\033[48;2;%d;%d;%dm' "$r" "$g" "$b"; }
+Z=$'\033[0m'
+
+# ---------- palettes ----------
+kval(){ grep -m1 -E "^$2([[:space:]]|\$)" "$1" 2>/dev/null | awk '{print $2}'; }
+
+write_pal(){ cat > "$PAL/$1.env" <<EOF
+# palette: $1
+# source: ${11}
+bg=$2
+bg2=$3
+fg=$4
+dim=$5
+line=$6
+accent=$7
+accent_lit=$8
+sel=$9
+on_accent=${10}
+EOF
+}
+
+gen_from_kitty(){
+  local f="$1" name bgc fgc active_border active_tab cur c1 selbg accent lit dim line bg2 onacc
+  name=$(basename "$f" .conf)
+  bgc=$(kval "$f" background); fgc=$(kval "$f" foreground)
+  { [ -z "$bgc" ] || [ -z "$fgc" ]; } && return 1
+  active_border=$(kval "$f" active_border_color)
+  active_tab=$(kval "$f" active_tab_background)
+  cur=$(kval "$f" cursor); c1=$(kval "$f" color1)
+  selbg=$(kval "$f" selection_background)
+  # Kitty's visual accent is the active border/tab, not the cursor. Using the
+  # cursor made BlackArch red and almost identical to Terminal Red, even though
+  # Kitty shows the violet #5f5faf highlight.
+  accent="${active_border:-${active_tab:-${cur:-${c1:-#888888}}}}"
+  dim=$(mix "$fgc" "$bgc" 45); line=$(mix "$fgc" "$bgc" 16); bg2=$(mix "$fgc" "$bgc" 6)
+  if is_dark "$bgc"; then lit=$(mix "$accent" "#ffffff" 70); onacc="#ffffff"
+  else                    lit=$(mix "$accent" "#000000" 72); onacc="#111111"; fi
+  selbg="${selbg:-$(mix "$accent" "$bgc" 18)}"
+  write_pal "$name" "$bgc" "$bg2" "$fgc" "$dim" "$line" "$accent" "$lit" "$selbg" "$onacc" \
+            "${f/#$HOME/\~}"
+}
+
+gen_palettes(){
+  local n=0 f
+  for f in "$KTD"/*.conf; do
+    [ -e "$f" ] || continue
+    case "$(basename "$f")" in current.conf) continue;; esac
+    gen_from_kitty "$f" && n=$((n+1))
+  done
+  write_pal "sddm-terminal-red" "#000000" "#0a0000" "#cccccc" "#666666" "#333333" \
+            "#8b0000" "#cc2200" "#8b0000" "#ffffff" "SDDM terminal-red theme"
+  n=$((n+1))
+  ok "$n $(t 'palettes in') ${PAL/#$HOME/\~}"
+}
+
+palettes(){ find "$PAL" -maxdepth 1 -name '*.env' -printf '%f\n' 2>/dev/null | sed 's/\.env$//' | sort; }
+loadpal(){ set -a; . "$PAL/$1.env"; set +a; }
+
+# ---------- generators ----------
+onoff(){ [ "$1" = "on" ] && echo true || echo false; }
+yesno(){ [ "$1" = "sim" ] && echo true || echo false; }
+
+gen_look(){
+  cat > "$LOOK" <<EOF
+-- Generated by Hyprism — do not edit by hand. Use: hyprism
+return {
+    border           = $(sget border),
+    rounding         = $(sget rounding),
+    rounding_power   = $(sget rounding_power),
+    gaps_in          = $(sget gaps_in),
+    gaps_out         = $(sget gaps_out),
+
+    blur             = $(onoff "$(sget blur)"),
+    blur_size        = $(sget blur_size),
+    blur_passes      = $(sget blur_passes),
+    blur_xray        = $(yesno "$(sget blur_xray)"),
+    blur_brightness  = $(sget blur_brightness),
+    blur_vibrancy    = $(sget blur_vibrancy),
+
+    shadow           = $(onoff "$(sget shadow)"),
+    shadow_range     = $(sget shadow_range),
+    shadow_power     = $(sget shadow_power),
+    shadow_scale     = $(sget shadow_scale),
+    shadow_offset_x  = $(sget shadow_offset_x),
+    shadow_offset_y  = $(sget shadow_offset_y),
+
+    active_opacity   = $(awk "BEGIN{printf \"%.2f\", $(sget active_op)/100}"),
+    inactive_opacity = $(awk "BEGIN{printf \"%.2f\", $(sget inactive_op)/100}"),
+    fullscreen_opacity = $(awk "BEGIN{printf \"%.2f\", $(sget fullscreen_op)/100}"),
+    dim_inactive     = $(yesno "$(sget dim_inactive)"),
+    dim_strength     = $(awk "BEGIN{printf \"%.2f\", $(sget dim_strength)/100}"),
+    anim             = "$(sget anim)",
+
+    float_all        = $([ "$(sget float_all)" = "sim" ] && echo true || echo false),
+    win_size         = "$(sget win_size)",
+    layout           = "$(sget layout)",
+    snap             = $(yesno "$(sget snap)"),
+    snap_gap         = $(sget snap_gap),
+    snap_overlap     = $(yesno "$(sget snap_overlap)"),
+    snap_respect_gaps = $(yesno "$(sget snap_respect_gaps)"),
+    resize_border    = $(yesno "$(sget resize_border)"),
+    focus_activate   = $(yesno "$(sget focus_activate)"),
+    preserve_split   = $(yesno "$(sget preserve_split)"),
+
+    workspace_count      = $(sget workspace_count),
+    workspace_persistent = $(yesno "$(sget workspace_persistent)"),
+    workspace_smart_gaps = $(yesno "$(sget workspace_smart_gaps)"),
+    workspace_layout     = "$(sget workspace_layout)",
+    workspace_gap        = $(sget workspace_gap),
+    workspace_wrap       = $(yesno "$(sget workspace_wrap)"),
+    workspace_backforth  = $(yesno "$(sget workspace_backforth)"),
+
+    kb_layout        = "$(sget kb_layout)",
+    kb_variant       = "$(sget kb_variant)",
+    follow_mouse     = $(sget follow_mouse),
+    mouse_sensitivity = $(sget mouse_sensitivity),
+    mouse_scroll     = $(sget mouse_scroll),
+    mouse_natural    = $(yesno "$(sget mouse_natural)"),
+    touch_natural    = $(yesno "$(sget touch_natural)"),
+    touch_tap        = $(yesno "$(sget touch_tap)"),
+    touch_dwt        = $(yesno "$(sget touch_dwt)"),
+    touch_scroll     = $(sget touch_scroll),
+    gesture_fingers  = $(sget gesture_fingers),
+
+    cursor_theme     = "$(sget cursor_theme)",
+    cursor_size      = $(sget cursor_size),
+    cursor_hide_key  = $(yesno "$(sget cursor_hide_key)"),
+    cursor_timeout   = $(sget cursor_timeout),
+
+    bar_enabled      = $(onoff "$(sget bar_enabled)"),
+}
+EOF
+}
+
+gen_colors(){
+  local ba bi
+  ba="$accent"                              # ja veio ajustado por apply_accent
+  bi=$(sget border_inactive); [ -z "$bi" ] && bi="$line"
+
+  cat > "$COLORS" <<EOF
+-- Generated by Hyprism — do not edit by hand.
+-- Active palette: $1
+return {
+    name       = "$1",
+    bg         = "$bg",
+    bg2        = "$bg2",
+    fg         = "$fg",
+    dim        = "$dim",
+    line       = "$line",
+    accent     = "$accent",
+    accent_lit = "$accent_lit",
+    sel        = "$sel",
+    on_accent  = "$on_accent",
+
+    -- window borders (hyprism appearance)
+    border_active   = "$ba",
+    border_inactive = "$bi",
+}
+EOF
+}
+
+# The bar stylesheet is generated from the active palette (never hardcoded
+# colors, so every theme — light or dark — works) plus the chosen visual
+# style. Three styles share one head (colors + font reset) and then emit their
+# own structural block: 'flat' (attached, minimal — the default), 'pills'
+# (floating, one rounded chip per module) and 'segmented' (attached, rounded
+# module clusters). Margin/radius/gap are user knobs read from .state.
+gen_waybar(){
+  local style margin radius gap
+  style=$(sget bar_style); case "$style" in flat|pills|segmented) ;; *) style=flat ;; esac
+  margin=$(sget bar_margin); [ -z "$margin" ] && margin=0
+  radius=$(sget bar_radius); [ -z "$radius" ] && radius=0
+  gap=$(sget bar_gap);       [ -z "$gap" ]    && gap=0
+
+  {
+  cat <<EOF
+/* Generated by Hyprism — palette $1, style $style. Do not edit by hand. */
+@define-color bg $bg; @define-color bg2 $bg2; @define-color fg $fg;
+@define-color dim $dim; @define-color line $line;
+@define-color accent $accent; @define-color lit $accent_lit; @define-color sel $sel;
+
+* { font-family: "$(sget barfont)", "Symbols Nerd Font", monospace; font-size: $(sget barsize)px;
+    min-height: 0; border: none; border-radius: 0; box-shadow: none; text-shadow: none; }
+window#waybar.hidden { opacity: 0.0; }
+EOF
+
+  case "$style" in
+  flat) cat <<EOF
+window#waybar { background: @bg; color: @fg; border-top: 1px solid @accent; }
+
+#custom-launcher, #workspaces, #window, #tray, #pulseaudio, #network,
+#cpu, #memory, #backlight, #battery, #clock, #temperature, #disk,
+#language, #idle_inhibitor, #custom-media, #custom-power {
+    background: transparent; padding: 0 9px; margin: 0; color: @dim;
+}
+#custom-launcher { color: @accent; font-size: $(sget barsize)px;
+                   padding: 0 14px; background: @bg2; }
+#custom-launcher:hover { background: @sel; color: #ffffff; }
+
+/* Indicators: a thin vertical rule between each, without clutter */
+#language, #idle_inhibitor, #temperature, #disk, #memory, #cpu,
+#backlight, #pulseaudio, #network, #battery {
+    border-left: 1px solid @line;
+}
+#language:hover, #idle_inhibitor:hover, #temperature:hover, #disk:hover,
+#memory:hover, #custom-media:hover, #custom-power:hover { color: @lit; }
+
+/* Now playing: a discreet highlight in the center */
+#custom-media { color: @dim; font-style: italic; padding: 0 14px; }
+
+/* Alerts */
+#temperature.critical { color: #ffffff; background: @sel; }
+#idle_inhibitor.activated { color: @accent; }
+
+/* Session button: the only item closing the bar on the right */
+#custom-power { color: @accent; background: @bg2; padding: 0 13px;
+                border-left: 1px solid @line; }
+#custom-power:hover { background: @sel; color: #ffffff; }
+
+#workspaces button { padding: 0 9px; color: @dim; background: transparent;
+                     border-bottom: 2px solid transparent; }
+#workspaces button.active { color: @fg; background: @bg2; border-bottom: 2px solid @accent; }
+#workspaces button.urgent { color: #ffffff; background: @sel; }
+#workspaces button:hover { background: @bg2; color: @fg; border-bottom: 2px solid @line; }
+
+#window { color: @fg; padding: 0 12px; }
+#tray { background: @bg2; padding: 0 8px; }
+#tray menu { background: @bg2; color: @fg; }
+#pulseaudio:hover, #network:hover, #cpu:hover, #memory:hover, #backlight:hover { color: @lit; }
+#pulseaudio.muted, #network.disconnected { color: @accent; }
+#battery.charging { color: @fg; }
+#battery.warning:not(.charging) { color: @lit; }
+#battery.critical:not(.charging) { color: #ffffff; background: @sel; }
+#clock { color: @fg; background: @bg2; padding: 0 14px; border-left: 1px solid @line; }
+tooltip { background: @bg2; border: 1px solid @line; color: @fg; }
+tooltip label { color: @fg; }
+EOF
+  ;;
+  pills) cat <<EOF
+/* Floating pills: transparent bar, each module a rounded chip. The float comes
+   from the transparent window + a taller bar (set by bar_style_set) showing the
+   wallpaper around the chips; side margin insets from the screen edges. */
+window#waybar { background: transparent; color: @fg; margin: 0 ${margin}px; }
+#custom-launcher, #window, #custom-media, #language, #idle_inhibitor,
+#temperature, #disk, #memory, #cpu, #backlight, #pulseaudio, #network,
+#tray, #battery, #clock, #custom-power {
+    background: @bg2; color: @dim;
+    margin: 4px ${gap}px; padding: 0 10px; border-radius: ${radius}px;
+}
+#workspaces { margin: 4px ${gap}px; padding: 0; }
+#workspaces button { background: @bg2; color: @dim; padding: 0 9px; border-radius: ${radius}px; }
+#workspaces button.active { background: @sel; color: @fg; }
+#workspaces button.urgent { background: @sel; color: #ffffff; }
+#custom-launcher { color: @accent; background: @sel; padding: 0 12px; }
+#custom-power { color: @accent; }
+#window { color: @fg; }
+#custom-media { color: @lit; font-style: italic; padding: 0 14px; }
+#language:hover, #idle_inhibitor:hover, #temperature:hover, #disk:hover,
+#memory:hover, #cpu:hover, #backlight:hover, #pulseaudio:hover, #network:hover,
+#battery:hover, #clock:hover, #custom-media:hover, #custom-power:hover,
+#custom-launcher:hover { background: @sel; color: @lit; }
+#temperature.critical, #battery.critical:not(.charging) { color: #ffffff; background: @sel; }
+#idle_inhibitor.activated { color: @accent; }
+#pulseaudio.muted, #network.disconnected { color: @accent; }
+#battery.charging { color: @fg; }
+#battery.warning:not(.charging) { color: @lit; }
+#tray { padding: 0 8px; }
+#tray menu { background: @bg2; color: @fg; }
+tooltip { background: @bg2; border: 1px solid @line; color: @fg; }
+tooltip label { color: @fg; }
+EOF
+  ;;
+  segmented) cat <<EOF
+/* Segmented: solid bar with rounded module clusters */
+window#waybar { background: @bg; color: @fg; border-top: 1px solid @accent; margin: 0 ${margin}px; }
+.modules-left, .modules-center, .modules-right {
+    background: @bg2; border-radius: ${radius}px; margin: 4px ${gap}px; padding: 0 4px;
+}
+#custom-launcher, #window, #custom-media, #language, #idle_inhibitor,
+#temperature, #disk, #memory, #cpu, #backlight, #pulseaudio, #network,
+#tray, #battery, #clock, #custom-power, #workspaces button {
+    background: transparent; color: @dim; padding: 0 9px;
+}
+#custom-launcher { color: @accent; }
+#custom-power { color: @accent; }
+#window { color: @fg; padding: 0 12px; }
+#custom-media { color: @lit; font-style: italic; }
+#clock { color: @fg; }
+/* internal separators, discreet */
+#idle_inhibitor, #temperature, #disk, #memory, #cpu, #backlight,
+#pulseaudio, #network, #battery { border-left: 1px solid @line; }
+#language:hover, #idle_inhibitor:hover, #temperature:hover, #disk:hover,
+#memory:hover, #cpu:hover, #backlight:hover, #pulseaudio:hover, #network:hover,
+#battery:hover, #clock:hover, #custom-media:hover, #custom-power:hover { color: @lit; }
+#workspaces button.active { color: @fg; border-bottom: 2px solid @accent; }
+#workspaces button.urgent { color: #ffffff; background: @sel; }
+#temperature.critical, #battery.critical:not(.charging) { color: #ffffff; background: @sel; }
+#idle_inhibitor.activated { color: @accent; }
+#pulseaudio.muted, #network.disconnected { color: @accent; }
+#battery.charging { color: @fg; }
+#battery.warning:not(.charging) { color: @lit; }
+#tray menu { background: @bg2; color: @fg; }
+tooltip { background: @bg2; border: 1px solid @line; color: @fg; }
+tooltip label { color: @fg; }
+EOF
+  ;;
+  esac
+  } > "$WBAR/style.css"
+}
+
+# Rebuilds only the three module lists in config.jsonc. The module definitions
+# stay in the original file, including clicks and tooltips, so the menu can
+# show/hide items without destroying hand-made tweaks.
+waybar_list(){
+  local out="" key module
+  while [ "$#" -ge 2 ]; do
+    key="$1"; module="$2"; shift 2
+    [ "$(sget "$key")" = "on" ] || continue
+    [ -n "$out" ] && out="$out, "
+    out="$out\"$module\""
+  done
+  printf '%s' "$out"
+}
+
+gen_waybar_layout(){
+  local cfg="$WBAR/config.jsonc" tmp left center right
+  [ -f "$cfg" ] || return 0
+  left=$(waybar_list \
+    bar_launcher custom/launcher bar_workspaces hyprland/workspaces \
+    bar_window hyprland/window)
+  center=$(waybar_list bar_media custom/media)
+  right=$(waybar_list \
+    bar_language hyprland/language bar_idle idle_inhibitor \
+    bar_temperature temperature bar_disk disk bar_memory memory bar_cpu cpu \
+    bar_backlight backlight bar_audio pulseaudio bar_network network \
+    bar_tray tray bar_battery battery bar_clock clock bar_power custom/power)
+
+  tmp=$(mktemp "$WBAR/.config.jsonc.XXXXXX") || return 1
+  awk -v left="$left" -v center="$center" -v right="$right" '
+    function replacement(name, value) {
+      printf "  \"modules-%s\": [%s],\n", name, value
+    }
+    skip {
+      if ($0 ~ /],[[:space:]]*$/) skip=0
+      next
+    }
+    /^[[:space:]]*"modules-left"[[:space:]]*:/ {
+      replacement("left", left)
+      if ($0 !~ /],[[:space:]]*$/) skip=1
+      next
+    }
+    /^[[:space:]]*"modules-center"[[:space:]]*:/ {
+      replacement("center", center)
+      if ($0 !~ /],[[:space:]]*$/) skip=1
+      next
+    }
+    /^[[:space:]]*"modules-right"[[:space:]]*:/ {
+      replacement("right", right)
+      if ($0 !~ /],[[:space:]]*$/) skip=1
+      next
+    }
+    { print }
+  ' "$cfg" > "$tmp" && chmod 644 "$tmp" && mv "$tmp" "$cfg"
+}
+
+gen_hyprlock(){
+  local wall; wall=$(cat "$WALLFILE" 2>/dev/null)
+  [ -f "$wall" ] || wall="$WALLDIR/gruvbox_forest-4.png"
+  local a="${accent#\#}" b="${bg#\#}" f="${fg#\#}" d="${dim#\#}" s="${sel#\#}" l="${accent_lit#\#}"
+  local brightness clock_labels datefmt
+  brightness=$(awk "BEGIN{printf \"%.2f\", $(sget lock_brightness)/100}")
+  [ "$LANGX" = pt ] && datefmt='%A, %d de %B' || datefmt='%A, %d %B'
+  clock_labels=""
+  if [ "$(sget lock_clock)" = "sim" ]; then
+    clock_labels=$(cat <<EOF
+label {
+    monitor =
+    text = cmd[update:1000] echo "\$(date +'%H:%M')"
+    color = rgba(${f}ff)
+    font_size = 112
+    font_family = $(sget barfont)
+    position = 0, 200
+    halign = center
+    valign = center
+}
+label {
+    monitor =
+    text = cmd[update:60000] echo "\$(date +'$datefmt')"
+    color = rgba(${d}ff)
+    font_size = 18
+    font_family = $(sget barfont)
+    position = 0, 100
+    halign = center
+    valign = center
+}
+EOF
+)
+  fi
+  cat > "$HD/hyprlock.conf" <<EOF
+# Generated by Hyprism — palette $1. Do not edit by hand.
+general {
+    hide_cursor = $(yesno "$(sget lock_hide_cursor)")
+}
+background {
+    monitor =
+    path = $wall
+    blur_passes = $(sget lock_blur)
+    blur_size = 6
+    brightness = $brightness
+}
+$clock_labels
+input-field {
+    monitor =
+    size = 320, 48
+    outline_thickness = $(sget border)
+    dots_center = true
+    outer_color = rgba(${a}ff)
+    inner_color = rgba(${b}ee)
+    font_color  = rgba(${f}ff)
+    check_color = rgba(${s}ff)
+    fail_color  = rgba(${l}ff)
+    rounding = $(sget rounding)
+    placeholder_text = <span foreground="#${d}">$(t 'password')</span>
+    fail_text = <span foreground="#${f}">$(t 'wrong password')</span>
+    position = 0, -60
+    halign = center
+    valign = center
+}
+label {
+    monitor =
+    text = \$USER
+    color = rgba(${l}ff)
+    font_size = 14
+    font_family = $(sget barfont)
+    position = 0, -10
+    halign = center
+    valign = center
+}
+EOF
+}
+
+gen_dunst(){
+  mkdir -p "$HOME/.config/dunst"
+  local icon_position icon_size
+  if [ "$(sget notif_icons)" = "sim" ]; then
+    icon_position=left; icon_size=48
+  else
+    icon_position=off; icon_size=0
+  fi
+  cat > "$HOME/.config/dunst/dunstrc" <<EOF
+# Generated by Hyprism — palette $1. Do not edit by hand.
+[global]
+    monitor = 0
+    follow = mouse
+    width = $(sget notif_width)
+    height = (0, 200)
+    origin = $(sget notif_position)
+    offset = (12, 38)
+    frame_width = $(sget border)
+    frame_color = "$accent"
+    separator_color = frame
+    corner_radius = $(sget rounding)
+    font = $(sget barfont) 10
+    format = "<b>%s</b>\\n%b"
+    icon_theme = Mono-Base
+    enable_recursive_icon_lookup = true
+    icon_position = $icon_position
+    max_icon_size = $icon_size
+[urgency_low]
+    background = "$bg"
+    foreground = "$dim"
+    timeout = $(sget notif_timeout)s
+[urgency_normal]
+    background = "$bg"
+    foreground = "$fg"
+    timeout = $(sget notif_timeout)s
+[urgency_critical]
+    background = "$sel"
+    foreground = "#ffffff"
+    frame_color = "$accent_lit"
+    timeout = 0
+EOF
+}
+
+restart_bar(){ pkill waybar >/dev/null 2>&1
+  [ "$(sget bar_enabled)" = "on" ] || return 0
+  sleep 0.4
+  setsid waybar >/dev/null 2>&1 < /dev/null & }
+restart_dunst(){ pkill dunst >/dev/null 2>&1; sleep 0.2
+  setsid dunst >/dev/null 2>&1 < /dev/null & }
+
+# Applies a wallpaper without persisting state. Used by the FZF live preview.
+# Delegates to set-wallpaper, which picks swaybg or mpvpaper depending on
+# whether the file is still or animated.
+apply_wall_now(){
+  local wall="$1"
+  [ -f "$wall" ] || return 1
+  "$HOME/.local/bin/set-wallpaper" "$wall" >/dev/null 2>&1
+}
+
+# The FZF preview must respond instantly. Previously each move waited for
+# swaybg to stop/start and the picker felt frozen. Now focus only records the
+# latest request; a single worker applies just the most recent selection after
+# a short debounce.
+queue_wall_preview(){
+  local wall="$1" tmp="$WALLCACHE/request.$$"
+  [ -f "$wall" ] || return 0
+  if [ -f "$WALLCACHE/worker.lock/pid" ]; then
+    local pid
+    pid=$(cat "$WALLCACHE/worker.lock/pid" 2>/dev/null || true)
+    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+      rmdir "$WALLCACHE/worker.lock" 2>/dev/null || true
+    fi
+  fi
+  printf '%s\n' "$wall" > "$tmp"
+  mv -f "$tmp" "$WALLCACHE/request"
+  if mkdir "$WALLCACHE/worker.lock" 2>/dev/null; then
+    setsid -f "$SELF" __wworker >/dev/null 2>&1 < /dev/null
+  fi
+}
+
+wall_preview_worker(){
+  trap 'rm -f "$WALLCACHE/worker.lock/pid"; rmdir "$WALLCACHE/worker.lock" 2>/dev/null || true' EXIT INT TERM
+  local requested latest
+  printf '%s\n' "$$" > "$WALLCACHE/worker.lock/pid"
+  while [ -f "$WALLCACHE/request" ]; do
+    requested=$(cat "$WALLCACHE/request" 2>/dev/null) || break
+    sleep 0.14
+    latest=$(cat "$WALLCACHE/request" 2>/dev/null || true)
+    [ "$requested" = "$latest" ] || continue
+    rm -f "$WALLCACHE/request"
+    apply_wall_now "$requested"
+  done
+}
+
+stop_wall_preview(){
+  rm -f "$WALLCACHE/request"
+  local n=0
+  while [ -d "$WALLCACHE/worker.lock" ] && [ "$n" -lt 30 ]; do
+    sleep 0.05
+    n=$((n+1))
+  done
+}
+
+# Applies the hand-picked accent and brightness tweak ON TOP of the freshly
+# loaded palette. Since every generator reads $accent / $accent_lit, touching
+# it here propagates on its own to Hyprland, Waybar, Hyprlock and Dunst.
+apply_accent(){
+  local ov br
+  ov=$(sget accent_override)
+  [ -n "$ov" ] && accent="$ov"
+
+  br=$(sget accent_bright); [ -z "$br" ] && br=100
+  if [ "$br" -gt 100 ] 2>/dev/null; then
+    accent=$(mix "#ffffff" "$accent" $(( br - 100 )))
+  elif [ "$br" -lt 100 ] 2>/dev/null; then
+    accent=$(mix "#000000" "$accent" $(( 100 - br )))
+  fi
+
+  # the light tone follows the accent
+  if is_dark "$bg"; then accent_lit=$(mix "$accent" "#ffffff" 70)
+  else                   accent_lit=$(mix "$accent" "#000000" 72); fi
+
+  # expose it so rofitheme can use the same accent
+  printf '%s\n' "$accent" > "$HD/accent"
+}
+
+# Ask rofi to adopt the same accent. rofitheme owns its own files; here we just
+# ask it to re-render its active palette (which re-reads the shared accent).
+sync_rofi(){
+  have rofitheme || return 0
+  local ra; ra=$(cat "$HOME/.config/rofi/themes/.active" 2>/dev/null)
+  [ -n "$ra" ] && rofitheme "$ra" >/dev/null 2>&1
+  return 0
+}
+
+render(){
+  seed
+  local name; name=$(cat "$STATE" 2>/dev/null)
+  [ -f "$PAL/$name.env" ] || name="sddm-terminal-red"
+  loadpal "$name"
+  apply_accent
+  gen_look
+  gen_colors   "$name"
+  gen_waybar   "$name"
+  gen_waybar_layout
+  gen_hyprlock "$name"
+  gen_dunst    "$name"
+  if have hyprctl; then
+    hyprctl reload >/dev/null 2>&1
+    hyprctl setcursor "$(sget cursor_theme)" "$(sget cursor_size)" >/dev/null 2>&1
+  fi
+  sync_rofi
+  restart_bar; restart_dunst
+  return 0
+}
+
+apply(){
+  [ -f "$PAL/$1.env" ] || { err "$(t 'palette') '$1' $(t 'does not exist — try hyprism -l')"; return 1; }
+  # Switching palettes must actually show the chosen palette. A manual accent
+  # (e.g. #2a2a2a) used to survive and make BlackArch, Rofi and other palettes
+  # look like the previous theme. Border tweaks can be reapplied afterwards,
+  # explicitly, from the Borders menu.
+  sset accent_override ""
+  sset accent_bright 100
+  sset border_active ""
+  sset border_inactive ""
+  printf '%s\n' "$1" > "$STATE"
+  render
+  ok "$(t 'palette'): $1  (Hyprland + Waybar + Hyprlock + Dunst)"
+}
+
+# ---------- preview ----------
+preview(){
+  local p="$PAL/$1.env"; [ -f "$p" ] || { echo "$(t 'no palette')"; return; }
+  ( set -a; . "$p"; set +a
+    local src; src=$(grep -m1 -E '^# (origem|source):' "$p" | sed -E 's/^# (origem|source): //')
+    printf '%-8s %s\n' "$(t 'palette')" "$1"
+    [ -n "$src" ] && printf '%-8s %s\n' "$(t 'source')" "$src"
+    printf '\n'
+    local W=42 B; B=$(abg "$bg")
+    printf '%s%s ┌─ %s %*s%s\n' "$B" "$(afg "$accent")" "$(t 'active window')" $((W-16)) '' "$Z"
+    printf '%s%s │ %s%-*s%s\n' "$B" "$(afg "$accent")" "$(afg "$fg")"  $((W-4)) "$(t 'normal text')" "$Z"
+    printf '%s%s │ %s%-*s%s\n' "$B" "$(afg "$accent")" "$(afg "$dim")" $((W-4)) "$(t 'dim text')" "$Z"
+    printf '%s%s%-*s%s\n' "$(abg "$sel")" "$(afg "$on_accent")" "$W" " $(t 'selected item')" "$Z"
+    printf '%s%s%-*s%s\n' "$(abg "$bg2")" "$(afg "$accent_lit")" "$W" " $(t 'bar / highlight')" "$Z"
+    printf '\n'
+    printf '%s    %s bg        %s\n' "$(abg "$bg")" "$Z" "$bg"
+    printf '%s    %s fg        %s\n' "$(abg "$fg")" "$Z" "$fg"
+    printf '%s    %s %-9s %s\n' "$(abg "$accent")" "$Z" "$(t 'accent')" "$accent"
+    printf '%s    %s %-9s %s\n' "$(abg "$accent_lit")" "$Z" "$(t 'highlight')" "$accent_lit"
+    printf '%s    %s %-9s %s\n' "$(abg "$sel")" "$Z" "$(t 'selection')" "$sel" )
+}
+
+preview_wall(){
+  local name="$1" f="$WALLDIR/$1" ext img thumbkey
+  ext="${name##*.}"; ext="${ext,,}"
+  thumbkey="$THUMBS/$(printf '%s' "$name" | tr -c '[:alnum:]._-' '_')"
+
+  printf '%-10s %s\n' "$(t 'file')" "$name"
+
+  case "$ext" in
+    gif|mp4|webm|mkv|mov|avi)
+      printf '%-10s %s (%s)\n' "$(t 'type')" "$(t 'animated')" "$ext"
+      have mpvpaper || printf '%-10s %s\n' "$(t 'note')" "$(t 'mpvpaper missing: it will stay a still frame')"
+      img="$thumbkey.frame.png"
+      if [ ! -f "$img" ] || [ "$f" -nt "$img" ]; then
+        if have ffmpeg; then ffmpeg -y -loglevel error -i "$f" -vframes 1 -vf 'scale=900:-1' "$img" >/dev/null 2>&1
+        elif have magick; then magick "${f}[0]" -resize 900x "$img" >/dev/null 2>&1; fi
+      fi
+      ;;
+    *)
+      # Cache a downscaled thumbnail so kitten icat transfers little data. Big
+      # JPGs (several MB) were re-encoded on every arrow key; this makes the
+      # preview feel instant. Falls back to the original if magick is missing.
+      img="$thumbkey.thumb.png"
+      if have magick; then
+        if [ ! -f "$img" ] || [ "$f" -nt "$img" ]; then
+          magick "$f" -auto-orient -resize '1200x1200>' "$img" >/dev/null 2>&1 || img="$f"
+        fi
+      else img="$f"; fi
+      [ -f "$img" ] || img="$f"
+      ;;
+  esac
+
+  if have magick && [ -f "$f" ]; then
+    printf '%-10s %s\n' "$(t 'resolution')" "$(magick identify -format '%wx%h' "$f" 2>/dev/null)"
+  fi
+  printf '%-10s %s\n' "$(t 'size')" "$(du -h "$f" 2>/dev/null | cut -f1)"
+  printf '\n'
+
+  [ -f "${img:-}" ] || { printf '(%s)\n' "$(t 'could not build the thumbnail')"; return 0; }
+
+  # The image sits inside the fzf panel. icat draws over the whole terminal, so
+  # --place uses the panel geometry that fzf exports in FZF_PREVIEW_*; the 4
+  # subtracted lines are the text header above.
+  local cols=${FZF_PREVIEW_COLUMNS:-44}
+  local rows=${FZF_PREVIEW_LINES:-24}
+  local left=${FZF_PREVIEW_LEFT:-0}
+  local top=${FZF_PREVIEW_TOP:-0}
+  local ih=$(( rows - 5 )); [ "$ih" -lt 4 ] && ih=4
+
+  if have kitten && [ -n "${KITTY_WINDOW_ID:-}" ]; then
+    kitten icat --clear --transfer-mode=memory --stdin=no --scale-up \
+      --place="${cols}x${ih}@${left}x$(( top + 4 ))" "$img" 2>/dev/null
+  elif have chafa; then
+    chafa --size="${cols}x${ih}" "$img" 2>/dev/null
+  else
+    printf '(%s)\n' "$(t 'no image viewer: inside kitty the image shows on its own; otherwise install chafa')"
+  fi
+}
+
+clear_wall_preview(){
+  # Kitty's graphics protocol draws over the terminal grid. The preview process
+  # exits with fzf, but the image stays until it receives an explicit clear.
+  if have kitten && [ -n "${KITTY_WINDOW_ID:-}" ]; then
+    kitten icat --clear 2>/dev/null || true
+  fi
+}
+
+# ---------- menus ----------
+pick_palette(){
+  [ -z "$(palettes)" ] && gen_palettes >/dev/null
+  local sel; sel=$(palettes | FZF --prompt="$(t 'palette') > " \
+      --preview "$SELF __prev {1}" --preview-window='right,54%,border-left' \
+      --header="$(t 'ENTER applies to Hyprland, Waybar, Hyprlock and Dunst')")
+  [ -n "${sel:-}" ] && apply "$sel"
+}
+
+# The list of wallpapers, one filename per line (spaces preserved).
+wall_find(){
+  cd "$WALLDIR" 2>/dev/null || return 0
+  find . -maxdepth 1 -type f \
+    \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \
+       -o -iname '*.gif' -o -iname '*.mp4' -o -iname '*.webm' -o -iname '*.mkv' -o -iname '*.mov' -o -iname '*.avi' \) \
+    -printf '%f\n' | sort
+}
+
+# Keep hyprpaper.conf in sync with the chosen wallpaper so a fresh login that
+# happens to start hyprpaper shows the right image (the live daemon is swaybg,
+# driven by set-wallpaper, but the two configs no longer disagree).
+write_hyprpaper(){
+  local wall="$1" conf="$HD/hyprpaper.conf" outs o
+  # Parse the plain output ("Monitor eDP-1 (ID 0):"), not -j: the JSON also has
+  # a "name" field on workspaces, which would pollute the monitor list.
+  outs=""
+  have hyprctl && outs=$(hyprctl monitors 2>/dev/null | awk '/^Monitor /{print $2}')
+  {
+    printf 'preload = %s\n' "$wall"
+    if [ -n "$outs" ]; then
+      while read -r o; do [ -n "$o" ] && printf 'wallpaper = %s,%s\n' "$o" "$wall"; done <<<"$outs"
+    else
+      printf 'wallpaper = ,%s\n' "$wall"
+    fi
+    printf 'splash = false\nipc = on\n'
+  } > "$conf"
+}
+
+pick_wallpaper(){
+  [ -d "$WALLDIR" ] || { err "$(t 'folder not found'): $WALLDIR"; return 1; }
+  local old sel clip; old=$(cat "$WALLFILE" 2>/dev/null)
+  clip=''; have wl-copy && clip='wl-copy'
+  [ -z "$clip" ] && have xclip && clip='xclip -selection clipboard'
+
+  local -a binds=(
+    --bind "focus:execute-silent($SELF __wlive {})"
+    --bind "ctrl-s:reload($SELF __wfind | shuf)"
+    --bind "alt-o:execute-silent(xdg-open $WALLDIR >/dev/null 2>&1)"
+  )
+  [ -n "$clip" ] && binds+=( --bind "ctrl-y:execute-silent(printf '%s' \"$WALLDIR/{}\" | $clip)" )
+
+  sel=$(wall_find \
+      | FZF --prompt="$(t 'wallpaper') > " --preview "$SELF __wprev {}" \
+        --preview-window='right,52%,border-left' "${binds[@]}" \
+        --header="$(t 'arrows preview live · ENTER apply · ESC restore · Ctrl-S shuffle · Alt-O folder')")
+  clear_wall_preview
+  if [ -z "${sel:-}" ]; then
+    stop_wall_preview
+    [ -n "${old:-}" ] && apply_wall_now "$old"
+    return 0
+  fi
+  stop_wall_preview
+  printf '%s\n' "$WALLDIR/$sel" > "$WALLFILE"
+  apply_wall_now "$WALLDIR/$sel"
+  write_hyprpaper "$WALLDIR/$sel"
+  render
+  ok "$(t 'wallpaper'): $sel ($(t 'also on the lock screen'))"
+}
+
+# ---------- border color ----------
+# Applies just the border, live, without persisting. Used by the FZF preview.
+border_live(){
+  have hyprctl || return 0
+  local a="${1#\#}" i="${2#\#}"
+  [ -n "$i" ] || i="2a2a2a"
+  hyprctl eval "hl.config({ general = { col = { active_border = \"rgba(${a}ff)\", inactive_border = \"rgba(${i}ff)\" } } })" >/dev/null 2>&1
+}
+
+# Offered colors: the palette's own first, then a handful of common tones.
+# Format: "hex  name" (the hex stays as the canonical first token).
+border_options(){
+  local name; name=$(cat "$STATE" 2>/dev/null)
+  [ -f "$PAL/$name.env" ] && ( set -a; . "$PAL/$name.env"; set +a
+    printf '%s  %s\n' "$accent"     "$(t 'palette accent')"
+    printf '%s  %s\n' "$accent_lit" "$(t 'light accent')"
+    printf '%s  %s\n' "$line"       "$(t 'palette line')"
+    printf '%s  %s\n' "$sel"        "$(t 'selection')"
+    printf '%s  %s\n' "$fg"         "$(t 'text')" )
+  cat <<EOF
+#ff2b2b  $(t 'bright red')
+#8b0000  $(t 'dark red')
+#cc2200  $(t 'brick red')
+#ff6a6a  $(t 'light red')
+#ffffff  $(t 'white')
+#888888  $(t 'medium gray')
+#2a2a2a  $(t 'dark gray')
+#000000  $(t 'black')
+#00ff9c  $(t 'phosphor green')
+#39d353  $(t 'green')
+#ffcf40  $(t 'amber')
+#ff8800  $(t 'orange')
+#00b4d8  $(t 'cyan')
+#7c5cff  $(t 'purple')
+EOF
+}
+
+preview_border(){
+  local hex="$1"
+  local name; name=$(cat "$STATE" 2>/dev/null)
+  [ -f "$PAL/$name.env" ] && loadpal "$name"
+  local inactive; inactive=$(sget border_inactive)
+  [ -f "$PAL/$name.env" ] && [ -z "$inactive" ] && \
+    inactive=$( set -a; . "$PAL/$name.env"; set +a; printf '%s' "$line" )
+
+  printf '%-14s %s\n' "$(t 'active border')" "$hex"
+  printf '%-14s %s\n\n' "$(t 'inactive border')" "${inactive:-#2a2a2a}"
+
+  # draw two little windows, active and inactive
+  local W=34 B lblA lblI; B=$(abg "${bg:-#000000}" 2>/dev/null || printf '')
+  lblA=$(t 'active window'); lblI=$(t 'inactive window')
+  printf '%s%s' "$(afg "$hex")" ""
+  printf '  ┌%s┐\n' "$(printf '─%.0s' $(seq 1 $W))"
+  printf '  │%s│\n' "$(printf ' %.0s' $(seq 1 $W))"
+  printf '  │%*s%*s│\n' $(( (W+${#lblA})/2 )) "$lblA" $(( W - (W+${#lblA})/2 )) ""
+  printf '  │%s│\n' "$(printf ' %.0s' $(seq 1 $W))"
+  printf '  └%s┘%s\n\n' "$(printf '─%.0s' $(seq 1 $W))" "$Z"
+
+  printf '%s' "$(afg "${inactive:-#2a2a2a}")"
+  printf '  ┌%s┐\n' "$(printf '─%.0s' $(seq 1 $W))"
+  printf '  │%*s%*s│\n' $(( (W+${#lblI})/2 )) "$lblI" $(( W - (W+${#lblI})/2 )) ""
+  printf '  └%s┘%s\n' "$(printf '─%.0s' $(seq 1 $W))" "$Z"
+
+  printf '\n%s        %s  %s\n' "$(abg "$hex")" "$Z" "$hex"
+}
+
+pick_bordas(){
+  local sel
+  sel=$( { printf 'follow  %s\n' "$(t 'the palette color (default)')"; border_options; } \
+      | FZF --prompt="$(t 'accent color') > " \
+        --preview "$SELF __bprev {1}" --preview-window='right,50%,border-left' \
+        --bind "focus:execute-silent($SELF __blive {1})" \
+        --header="$(t 'arrows show on screen · ENTER apply · ESC restore')")
+
+  if [ -z "${sel:-}" ]; then render >/dev/null 2>&1; return 0; fi
+
+  local hex="${sel%% *}"
+  if [ "$hex" = "follow" ]; then
+    sset accent_override ""
+  else
+    sset accent_override "$hex"
+  fi
+
+  # Brightness: lighten or darken the chosen accent, live.
+  local b
+  b=$(printf '%s\n' \
+        "160  $(t 'much lighter')" \
+        "140  $(t 'lighter')" \
+        "120  $(t 'a bit lighter')" \
+        "100  $(t 'original color')" \
+        " 85  $(t 'a bit darker')" \
+        " 70  $(t 'darker')" \
+        " 55  $(t 'much darker')" \
+      | FZF --prompt="$(t 'brightness') > " \
+        --preview "$SELF __brprev {1}" --preview-window='right,50%,border-left' \
+        --bind "focus:execute-silent($SELF __brlive {1})" \
+        --header="$(t 'arrows show on screen · ENTER apply')")
+  [ -n "${b:-}" ] && sset accent_bright "$(printf '%s' "${b%% *}" | tr -d ' ')"
+
+  render
+  ok "$(t 'accent'): $(cat "$HD/accent" 2>/dev/null)  $(t 'brightness') $(sget accent_bright)%  (Hyprland · bar · rofi · lock · notifications)"
+}
+
+# Computes the effective accent for a given brightness percentage, no writes.
+bright_of(){
+  local base br="$1"
+  base=$(sget accent_override)
+  if [ -z "$base" ]; then
+    local name; name=$(cat "$STATE" 2>/dev/null)
+    base=$( set -a; . "$PAL/$name.env" 2>/dev/null; set +a; printf '%s' "${accent:-#888888}" )
+  fi
+  if [ "$br" -gt 100 ] 2>/dev/null; then mix "#ffffff" "$base" $(( br - 100 ))
+  elif [ "$br" -lt 100 ] 2>/dev/null; then mix "#000000" "$base" $(( 100 - br ))
+  else printf '%s' "$base"; fi
+}
+
+preview_bright(){
+  local br="${1// /}" hex
+  hex=$(bright_of "$br")
+  printf '%-11s %s%%\n' "$(t 'brightness')" "$br"
+  printf '%-11s %s\n\n' "$(t 'color')" "$hex"
+  preview_border "$hex" | tail -n +3
+}
+
+bright_live(){
+  local hex inactive name
+  hex=$(bright_of "${1// /}")
+  inactive=$(sget border_inactive)
+  if [ -z "$inactive" ]; then
+    name=$(cat "$STATE" 2>/dev/null)
+    inactive=$(set -a; . "$PAL/$name.env" 2>/dev/null; set +a; printf '%s' "${line:-#2a2a2a}")
+  fi
+  border_live "$hex" "$inactive"
+}
+
+pick_aparencia(){
+  local c v pair gi go changed
+  while true; do
+    c=$( {
+      row border  "$(t 'border') · $(sget border)px"
+      row corners "$(t 'corners') · $(sget rounding)px, $(t 'power') $(sget rounding_power)"
+      row spacing "$(t 'spacing') · $(t 'inner') $(sget gaps_in)px / $(t 'outer') $(sget gaps_out)px"
+      row back    "$(t 'back')"
+      } | FZFM --prompt="$(t 'appearance') > " \
+          --header="$(t 'border, corner shape and breathing room between windows')" )
+    changed=0
+    case "$(mkey "$c")" in
+      border)
+        v=$(printf '%s\n' "0  $(t 'no border')" "1  $(t 'thin (recommended)')" "2  $(t 'medium')" "3  $(t 'marked')" "5  $(t 'thick')" \
+          | FZF --prompt="$(t 'border') > " --header="$(t 'window border width')")
+        [ -n "${v:-}" ] && { sset border "${v%% *}"; changed=1; }
+        ;;
+      corners)
+        v=$(printf '%s\n' "0  $(t 'square')" "4  $(t 'almost square')" "8  $(t 'discreet')" "12 $(t 'rounded')" "16 $(t 'very round')" "24 $(t 'capsule')" \
+          | FZF --prompt="$(t 'corner radius') > ")
+        [ -n "${v:-}" ] && { sset rounding "${v%% *}"; changed=1; }
+        v=$(printf '%s\n' "1.0  $(t 'beveled')" "2.0  $(t 'circular (default)')" "3.0  $(t 'soft')" "4.0  $(t 'squircle')" \
+          | FZF --prompt="$(t 'corner shape') > " --header="$(t 'higher power makes the arc more square')")
+        [ -n "${v:-}" ] && { sset rounding_power "${v%% *}"; changed=1; }
+        ;;
+      spacing)
+        v=$(printf '%s\n' "0/0   $(t 'no gaps')" "2/4   $(t 'compact (default)')" "4/8   $(t 'balanced')" "6/12  $(t 'airy')" "10/20 $(t 'spacious')" "14/28 $(t 'very spacious')" \
+          | FZF --prompt="$(t 'gaps inner/outer') > ")
+        if [ -n "${v:-}" ]; then
+          pair="${v%% *}"; gi="${pair%%/*}"; go="${pair#*/}"
+          sset gaps_in "$gi"; sset gaps_out "$go"; changed=1
+        fi
+        ;;
+      back|"") break ;;
+    esac
+    [ "$changed" -eq 1 ] && render >/dev/null 2>&1
+  done
+  ok "$(t 'border') $(sget border) · $(t 'corners') $(sget rounding) ($(t 'power') $(sget rounding_power)) · $(t 'gaps') $(sget gaps_in)/$(sget gaps_out)"
+}
+
+effects_preset(){
+  case "$1" in
+    performance|desempenho)
+      sset blur off; sset blur_xray nao
+      sset shadow off
+      sset active_op 100; sset inactive_op 100; sset fullscreen_op 100
+      sset dim_inactive nao
+      ;;
+    subtle|discreto)
+      sset blur off; sset blur_xray nao
+      sset shadow on; sset shadow_range 8; sset shadow_power 3
+      sset shadow_scale 0.98; sset shadow_offset_x 0; sset shadow_offset_y 2
+      sset active_op 100; sset inactive_op 96; sset fullscreen_op 100
+      sset dim_inactive nao
+      ;;
+    glass|vidro)
+      sset blur on; sset blur_size 6; sset blur_passes 2; sset blur_xray nao
+      sset blur_brightness 1.0; sset blur_vibrancy 0.17
+      sset shadow on; sset shadow_range 14; sset shadow_power 3
+      sset shadow_scale 0.98; sset shadow_offset_x 0; sset shadow_offset_y 2
+      sset active_op 98; sset inactive_op 92; sset fullscreen_op 100
+      sset dim_inactive nao
+      ;;
+    focus|foco)
+      sset blur on; sset blur_size 5; sset blur_passes 2; sset blur_xray nao
+      sset blur_brightness 0.95; sset blur_vibrancy 0.10
+      sset shadow on; sset shadow_range 12; sset shadow_power 3
+      sset shadow_scale 0.98; sset shadow_offset_x 0; sset shadow_offset_y 2
+      sset active_op 100; sset inactive_op 92; sset fullscreen_op 100
+      sset dim_inactive sim; sset dim_strength 8
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+pick_blur_advanced(){
+  local c v pair changed
+  while true; do
+    c=$( {
+      row state     "$(t 'state') · $(sget blur)"
+      row intensity "$(t 'intensity') · $(t 'size') $(sget blur_size), $(t 'passes') $(sget blur_passes)"
+      row xray      "xray · $(sget blur_xray)"
+      row brightness "$(t 'brightness') · $(sget blur_brightness)"
+      row vibrancy  "$(t 'vibrancy') · $(sget blur_vibrancy)"
+      row back      "$(t 'back')"
+      } | FZFM --prompt="$(t 'advanced blur') > " \
+          --header="$(t 'values kept within GPU-safe ranges')" )
+    changed=0
+    case "$(mkey "$c")" in
+      state)
+        v=$( { row off "$(t 'no blur')"; row on "$(t 'blur behind windows')"; } | FZFM --prompt="$(t 'blur') > ")
+        [ -n "${v:-}" ] && { sset blur "$(mkey "$v")"; changed=1; }
+        ;;
+      intensity)
+        v=$(printf '%s\n' "3/1   $(t 'light and cheap')" "5/2   $(t 'balanced')" "6/2   $(t 'soft glass')" "8/3   $(t 'strong')" "10/3  $(t 'very strong')" \
+          | FZF --prompt="$(t 'size/passes') > ")
+        if [ -n "${v:-}" ]; then
+          pair="${v%% *}"; sset blur_size "${pair%%/*}"; sset blur_passes "${pair#*/}"; changed=1
+        fi
+        ;;
+      xray)
+        v=$( { row nao "$(t 'limit blur to normal surfaces (default)')"; row sim "$(t 'pass through transparent surfaces')"; } \
+          | FZFM --prompt="blur xray > ")
+        [ -n "${v:-}" ] && { sset blur_xray "$(mkey "$v")"; changed=1; }
+        ;;
+      brightness)
+        v=$(printf '%s\n' "0.80 $(t 'dark')" "0.90 $(t 'slightly dark')" "1.00 $(t 'neutral')" "1.10 $(t 'light')" "1.20 $(t 'very light')" \
+          | FZF --prompt="$(t 'blur brightness') > ")
+        [ -n "${v:-}" ] && { sset blur_brightness "${v%% *}"; changed=1; }
+        ;;
+      vibrancy)
+        v=$(printf '%s\n' "0.00 $(t 'neutral')" "0.10 $(t 'discreet')" "0.17 $(t 'default')" "0.25 $(t 'vivid')" "0.35 $(t 'intense')" \
+          | FZF --prompt="$(t 'blur vibrancy') > ")
+        [ -n "${v:-}" ] && { sset blur_vibrancy "${v%% *}"; changed=1; }
+        ;;
+      back|"") break ;;
+    esac
+    [ "$changed" -eq 1 ] && render >/dev/null 2>&1
+  done
+}
+
+pick_shadow_advanced(){
+  local c v pair x y changed
+  while true; do
+    c=$( {
+      row state     "$(t 'state') · $(sget shadow)"
+      row intensity "$(t 'intensity') · $(t 'range') $(sget shadow_range), $(t 'power') $(sget shadow_power)"
+      row scale     "$(t 'scale') · $(sget shadow_scale)"
+      row offset    "$(t 'offset') · $(sget shadow_offset_x),$(sget shadow_offset_y)"
+      row back      "$(t 'back')"
+      } | FZFM --prompt="$(t 'advanced shadow') > " )
+    changed=0
+    case "$(mkey "$c")" in
+      state)
+        v=$( { row off "$(t 'no shadow')"; row on "$(t 'shadow under windows')"; } | FZFM --prompt="$(t 'shadow') > ")
+        [ -n "${v:-}" ] && { sset shadow "$(mkey "$v")"; changed=1; }
+        ;;
+      intensity)
+        v=$(printf '%s\n' "6/2   $(t 'light')" "10/3  $(t 'discreet')" "14/3  $(t 'balanced')" "20/4  $(t 'strong')" "28/4  $(t 'wide')" \
+          | FZF --prompt="$(t 'range/power') > ")
+        if [ -n "${v:-}" ]; then
+          pair="${v%% *}"; sset shadow_range "${pair%%/*}"; sset shadow_power "${pair#*/}"; changed=1
+        fi
+        ;;
+      scale)
+        v=$(printf '%s\n' "0.90 $(t 'compact')" "0.95 $(t 'smaller')" "0.98 $(t 'discreet')" "1.00 $(t 'window size')" \
+          | FZF --prompt="$(t 'shadow scale') > ")
+        [ -n "${v:-}" ] && { sset shadow_scale "${v%% *}"; changed=1; }
+        ;;
+      offset)
+        v=$(printf '%s\n' "0,0  $(t 'centered')" "0,2  $(t 'below, discreet')" "0,4  $(t 'below')" "2,4  $(t 'right and below')" "-2,4 $(t 'left and below')" \
+          | FZF --prompt="$(t 'offset x,y') > ")
+        if [ -n "${v:-}" ]; then
+          pair="${v%% *}"; x="${pair%%,*}"; y="${pair#*,}"
+          sset shadow_offset_x "$x"; sset shadow_offset_y "$y"; changed=1
+        fi
+        ;;
+      back|"") break ;;
+    esac
+    [ "$changed" -eq 1 ] && render >/dev/null 2>&1
+  done
+}
+
+pick_opacity_advanced(){
+  local c v key changed
+  while true; do
+    c=$( {
+      row active     "$(t 'active') · $(sget active_op)%"
+      row inactive   "$(t 'inactive') · $(sget inactive_op)%"
+      row fullscreen "$(t 'fullscreen') · $(sget fullscreen_op)%"
+      row back       "$(t 'back')"
+      } | FZFM --prompt="$(t 'opacity') > " \
+          --header="$(t 'an 80% floor keeps things readable')" )
+    changed=0; key=""
+    case "$(mkey "$c")" in
+      active) key=active_op ;;
+      inactive) key=inactive_op ;;
+      fullscreen) key=fullscreen_op ;;
+      back|"") break ;;
+    esac
+    if [ -n "$key" ]; then
+      v=$(printf '%s\n' "100 $(t 'opaque')" "98 $(t 'almost opaque')" "95 $(t 'translucent')" "92 $(t 'transparent')" "88 $(t 'marked')" "80 $(t 'safe floor')" \
+        | FZF --prompt="$(t 'opacity percentage') > ")
+      [ -n "${v:-}" ] && { sset "$key" "${v%% *}"; changed=1; }
+    fi
+    [ "$changed" -eq 1 ] && render >/dev/null 2>&1
+  done
+}
+
+pick_dim_advanced(){
+  local v
+  v=$( { row nao "$(t 'do not dim inactive windows')"; row sim "$(t 'highlight the focused window')"; } \
+    | FZFM --prompt="$(t 'dim inactive') > ")
+  [ -n "${v:-}" ] || return 0
+  sset dim_inactive "$(mkey "$v")"
+  if [ "$(sget dim_inactive)" = sim ]; then
+    v=$(printf '%s\n' "5  $(t 'very light')" "8  $(t 'discreet')" "10 $(t 'balanced')" "15 $(t 'strong')" "20 $(t 'very strong')" \
+      | FZF --prompt="$(t 'dim strength (%)') > ")
+    [ -n "${v:-}" ] && sset dim_strength "${v%% *}"
+  fi
+  render >/dev/null 2>&1
+}
+
+pick_efeitos(){
+  local requested="${1:-}" c v
+  if [ -n "$requested" ]; then
+    if ! effects_preset "$requested"; then
+      err "$(t 'invalid preset') '$requested' ($(t 'use performance, subtle, glass or focus'))"
+      return 2
+    fi
+    render
+    ok "$(t 'effects'): $(t 'preset') $requested"
+    return 0
+  fi
+  while true; do
+    c=$( {
+      row preset  "$(t 'preset') · $(t 'a ready, safe profile')"
+      row blur    "blur · $(sget blur), $(sget blur_size)x$(sget blur_passes), xray $(sget blur_xray)"
+      row shadow  "$(t 'shadow') · $(sget shadow), $(t 'range') $(sget shadow_range), $(t 'power') $(sget shadow_power)"
+      row opacity "$(t 'opacity') · $(t 'active') $(sget active_op)%, $(t 'inactive') $(sget inactive_op)%, $(t 'fullscreen') $(sget fullscreen_op)%"
+      row dim     "$(t 'dim') · $(t 'inactive') $(sget dim_inactive), $(t 'strength') $(sget dim_strength)%"
+      row back    "$(t 'back')"
+      } | FZFM --prompt="$(t 'effects') > " \
+          --header="$(t 'blur, shadow, transparency and focus; no experimental shaders')" )
+    case "$(mkey "$c")" in
+      preset)
+        v=$( {
+          row performance "$(t 'everything opaque, no blur or shadow')"
+          row subtle      "$(t 'light shadow and inactive at 96%')"
+          row glass       "$(t 'moderate blur and readable transparency')"
+          row focus       "$(t 'light blur and dimmed inactive windows')"
+          } | FZFM --prompt="$(t 'effects preset') > ")
+        if [ -n "${v:-}" ]; then effects_preset "$(mkey "$v")" && render >/dev/null 2>&1; fi
+        ;;
+      blur) pick_blur_advanced ;;
+      shadow) pick_shadow_advanced ;;
+      opacity) pick_opacity_advanced ;;
+      dim) pick_dim_advanced ;;
+      back|"") break ;;
+    esac
+  done
+  ok "blur $(sget blur) · $(t 'shadow') $(sget shadow) · $(t 'opacity') $(sget active_op)/$(sget inactive_op)/$(sget fullscreen_op) · $(t 'dim') $(sget dim_inactive)/$(sget dim_strength)%"
+}
+
+# The stored animation value is canonical (consumed by look.lua / hyprland.lua),
+# so keep the Portuguese-derived keys but accept English aliases on the CLI.
+anim_canon(){ case "$1" in
+  off|desligada) echo desligada;; fast|rapida) echo rapida;;
+  balanced|equilibrada) echo equilibrada;; smooth|suave) echo suave;;
+  elastic|elastica) echo elastica;; esac; }
+
+pick_animacoes(){
+  local requested="${1:-}" v canon
+  if [ -n "$requested" ]; then
+    canon=$(anim_canon "$requested")
+    [ -z "$canon" ] && { err "$(t 'invalid preset') '$requested' ($(t 'use off, fast, balanced, smooth or elastic'))"; return 2; }
+    sset anim "$canon"; render; ok "$(t 'animations'): $canon"; return 0
+  fi
+  v=$( {
+    row desligada   "$(t 'off — no animations')"
+    row rapida      "$(t 'fast — short and responsive')"
+    row equilibrada "$(t 'balanced — fluid without lagging the UI')"
+    row suave       "$(t 'smooth — longer transitions')"
+    row elastica    "$(t 'elastic — windows and workspaces with a damped spring')"
+    } | FZFM --prompt="$(t 'animations') ($(sget anim)) > " \
+        --header="$(t 'complete presets: windows, fade, layers and workspaces')" )
+  [ -n "${v:-}" ] || return 0
+  sset anim "$(mkey "$v")"; render; ok "$(t 'animations'): $(sget anim)"
+}
+
+# Applies a bar style plus its recommended margin/radius/gap. The knobs stay in
+# .state so the fine-tune submenu can override them afterwards, and so the style
+# survives palette switches. Colors are always the palette's — see gen_waybar.
+bar_style_set(){
+  local s="$1"; case "$s" in flat|pills|segmented) ;; *) return 1 ;; esac
+  sset bar_style "$s"
+  local h
+  case "$s" in
+    flat)      sset bar_margin 0; sset bar_radius 0;  sset bar_gap 0; h=26 ;;
+    pills)     sset bar_margin 8; sset bar_radius 10; sset bar_gap 3; h=34 ;;
+    segmented) sset bar_margin 0; sset bar_radius 8;  sset bar_gap 6; h=30 ;;
+  esac
+  # Pills/segmented need a bit more height so chips are not squished; flat is 26.
+  sset bar_enabled on; sset barh "$h"
+  [ -f "$WBAR/config.jsonc" ] && sed -i "s/\"height\": [0-9]*,/\"height\": $h,/" "$WBAR/config.jsonc"
+}
+
+pick_estilo(){
+  local s; s=$( { row flat      "$(t 'flat — attached, minimal (default)')"
+                  row pills     "$(t 'pills — floating, one rounded chip per module')"
+                  row segmented "$(t 'segmented — attached, rounded module clusters')"
+                } | FZFM --prompt="$(t 'bar style') > " \
+                    --header="$(t 'the overall look of the bar; colors follow the active palette')" )
+  [ -n "${s:-}" ] || return 0
+  bar_style_set "$(mkey "$s")"
+  render
+  # fine-tuning (each keeps current if skipped)
+  local m r g
+  m=$( { row keep "$(t 'keep current')"; row 0 "0"; row 4 "4px"; row 6 "6px"; row 8 "8px"; row 12 "12px"; } \
+       | FZFM --prompt="$(t 'outer margin') > " )
+  [ -n "${m:-}" ] && [ "$(mkey "$m")" != keep ] && { sset bar_margin "$(mkey "$m")"; render; }
+  r=$( { row keep "$(t 'keep current')"; row 0 "0"; row 4 "4px"; row 8 "8px"; row 12 "12px"; row 999 "$(t 'fully round')"; } \
+       | FZFM --prompt="$(t 'corner radius') > " )
+  [ -n "${r:-}" ] && [ "$(mkey "$r")" != keep ] && { sset bar_radius "$(mkey "$r")"; render; }
+  g=$( { row keep "$(t 'keep current')"; row 0 "0"; row 2 "2px"; row 4 "4px"; row 6 "6px"; row 8 "8px"; } \
+       | FZFM --prompt="$(t 'gap between modules') > " )
+  [ -n "${g:-}" ] && [ "$(mkey "$g")" != keep ] && { sset bar_gap "$(mkey "$g")"; render; }
+  ok "$(t 'style'): $(sget bar_style) · $(t 'margin') $(sget bar_margin) · $(t 'radius') $(sget bar_radius) · $(t 'gap') $(sget bar_gap)"
+}
+
+pick_barra(){
+  local h; h=$(printf '%s\n' "0   $(t 'no bar')" "22  $(t 'thin')" "26  $(t 'recommended')" "30  $(t 'tall')" "36  $(t 'thick')" \
+      | FZF --prompt="$(t 'bar height') > ")
+  if [ -n "${h:-}" ]; then
+    if [ "${h%% *}" = "0" ]; then
+      sset bar_enabled off
+    else
+      sset bar_enabled on
+      sset barh "${h%% *}"
+      sed -i "s/\"height\": [0-9]*,/\"height\": ${h%% *},/" "$WBAR/config.jsonc"
+    fi
+  fi
+  local p; p=$( { row bottom "$(t 'at the bottom')"; row top "$(t 'at the top')"; } | FZFM --prompt="$(t 'position') > ")
+  [ -n "${p:-}" ] && { p=$(mkey "$p"); sset barpos "$p"
+    sed -i "s/\"position\": \"[a-z]*\",/\"position\": \"$p\",/" "$WBAR/config.jsonc"; }
+  render
+  if [ "$(sget bar_enabled)" = "on" ]; then
+    ok "$(t 'bar'): $(sget barh)px, $(sget barpos)"
+  else
+    warn "$(t 'bar off — run: hyprism bar')"
+  fi
+}
+
+bar_module_keys(){
+  printf '%s\n' bar_launcher bar_workspaces bar_window bar_media bar_language \
+    bar_idle bar_temperature bar_disk bar_memory bar_cpu bar_backlight \
+    bar_audio bar_network bar_tray bar_battery bar_clock bar_power
+}
+
+bar_all(){
+  local value="$1" key
+  while read -r key; do sset "$key" "$value"; done < <(bar_module_keys)
+}
+
+bar_preset(){
+  local preset="$1"
+  bar_all off
+  case "$preset" in
+    minimo)
+      sset bar_window on; sset bar_audio on; sset bar_network on
+      sset bar_battery on; sset bar_clock on; sset bar_power on
+      ;;
+    equilibrado)
+      sset bar_window on; sset bar_media on; sset bar_language on
+      sset bar_idle on; sset bar_temperature on; sset bar_disk on
+      sset bar_memory on; sset bar_cpu on; sset bar_backlight on
+      sset bar_audio on; sset bar_network on; sset bar_battery on
+      sset bar_clock on; sset bar_power on
+      ;;
+    completo)
+      bar_all on
+      ;;
+  esac
+}
+
+bar_toggle(){
+  if [ "$(sget "$1")" = "on" ]; then sset "$1" off; else sset "$1" on; fi
+}
+
+bar_mark(){ [ "$(sget "$1")" = "on" ] && printf 'ON ' || printf 'off'; }
+
+pick_modulos(){
+  local c key
+  while true; do
+    c=$(printf '%s\n' \
+      "preset       $(t 'choose minimal, balanced or full')" \
+      "launcher     [$(bar_mark bar_launcher)] $(t 'search button')" \
+      "workspaces   [$(bar_mark bar_workspaces)] $(t 'workspaces')" \
+      "window       [$(bar_mark bar_window)] $(t 'window title')" \
+      "media        [$(bar_mark bar_media)] $(t 'now playing')" \
+      "language     [$(bar_mark bar_language)] $(t 'keyboard language')" \
+      "idle         [$(bar_mark bar_idle)] $(t 'prevent sleep')" \
+      "temperature  [$(bar_mark bar_temperature)] $(t 'temperature')" \
+      "disk         [$(bar_mark bar_disk)] $(t 'disk usage')" \
+      "memory       [$(bar_mark bar_memory)] $(t 'RAM')" \
+      "cpu          [$(bar_mark bar_cpu)] $(t 'processor usage')" \
+      "backlight    [$(bar_mark bar_backlight)] $(t 'screen brightness')" \
+      "audio        [$(bar_mark bar_audio)] $(t 'volume')" \
+      "network      [$(bar_mark bar_network)] $(t 'clickable Wi-Fi')" \
+      "tray         [$(bar_mark bar_tray)] $(t 'app icons')" \
+      "battery      [$(bar_mark bar_battery)] $(t 'battery')" \
+      "clock        [$(bar_mark bar_clock)] $(t 'clock')" \
+      "power        [$(bar_mark bar_power)] $(t 'session menu')" \
+      "back" | FZF --prompt="$(t 'bar modules') > " \
+        --header="$(t 'ENTER toggles the item; applied instantly')")
+    key="${c%% *}"
+    case "$key" in
+      preset)
+        local p; p=$( {
+          row minimo      "$(t 'window, sound, network, battery and clock')"
+          row equilibrado "$(t 'the current look, without tray icons')"
+          row completo    "$(t 'every module, including the tray')"
+          } | FZFM --prompt="$(t 'bar profile') > ")
+        [ -n "${p:-}" ] && bar_preset "$(mkey "$p")"
+        ;;
+      launcher) key=bar_launcher;; workspaces) key=bar_workspaces;;
+      window) key=bar_window;; media) key=bar_media;; language) key=bar_language;;
+      idle) key=bar_idle;; temperature) key=bar_temperature;; disk) key=bar_disk;;
+      memory) key=bar_memory;; cpu) key=bar_cpu;; backlight) key=bar_backlight;;
+      audio) key=bar_audio;; network) key=bar_network;; tray) key=bar_tray;;
+      battery) key=bar_battery;; clock) key=bar_clock;; power) key=bar_power;;
+      back|"") break;;
+    esac
+    case "$key" in bar_*) bar_toggle "$key";; esac
+    render >/dev/null 2>&1
+  done
+}
+
+pick_janelas(){
+  local c v
+  while true; do
+    c=$( {
+      row mode       "$(t 'mode') · $(sget float_all) ($(t 'sim = floating; nao = tiling'))"
+      row size       "$(t 'size') · $(sget win_size) $(t 'when opening floating')"
+      row layout     "$(t 'layout') · $(sget layout) $(t 'for tiled windows')"
+      row snap       "$(t 'snapping') · $(sget snap), $(sget snap_gap)px, $(t 'overlap') $(sget snap_overlap), $(t 'gaps') $(sget snap_respect_gaps)"
+      row resize     "$(t 'resize from the border') · $(sget resize_border)"
+      row activation "$(t 'apps may request focus') · $(sget focus_activate)"
+      row split      "$(t 'preserve the tiling split') · $(sget preserve_split)"
+      row back       "$(t 'back')"
+      } | FZFM --prompt="$(t 'window behavior') > " \
+          --header="$(t 'opening, focus, snapping and tiling options')" )
+    case "$(mkey "$c")" in
+      mode)
+        v=$( { row sim "$(t 'floating, free control like KDE')"; row nao "$(t 'tiling, Hyprland arranges')"; } \
+          | FZFM --prompt="$(t 'new window') > "); [ -n "${v:-}" ] && sset float_all "$(mkey "$v")"
+        ;;
+      size)
+        v=$(printf '%s\n' "40% 40%" "50% 50%  $(t 'recommended')" "60% 65%" "70% 75%" "85% 85%" "100% 100%  $(t 'full')" \
+          | FZF --prompt="$(t 'opening size') > ")
+        [ -n "${v:-}" ] && sset win_size "$(echo "$v" | sed 's/  .*//')"
+        ;;
+      layout)
+        v=$( { row dwindle "$(t 'tree tiling')"; row master "$(t 'one master window')"; row scrolling "$(t 'scrolling columns')"; } \
+          | FZFM --prompt="$(t 'layout') > "); [ -n "${v:-}" ] && sset layout "$(mkey "$v")"
+        ;;
+      snap)
+        v=$( { row sim "$(t 'sticks to edges and other windows')"; row nao "$(t 'fully free movement')"; } \
+          | FZFM --prompt="$(t 'magnetic snapping') > "); [ -n "${v:-}" ] && sset snap "$(mkey "$v")"
+        if [ "$(sget snap)" = sim ]; then
+          v=$(printf '%s\n' "5  $(t 'very close')" "10 $(t 'recommended')" "15 " "20 $(t 'easier to snap')" "30 " | FZF --prompt="$(t 'snap distance') > ")
+          [ -n "${v:-}" ] && sset snap_gap "${v%% *}"
+          v=$( { row nao "$(t 'edges only touch')"; row sim "$(t 'allow overlapping edges')"; } | FZFM --prompt="$(t 'overlap on snap') > ")
+          [ -n "${v:-}" ] && sset snap_overlap "$(mkey "$v")"
+          v=$( { row sim "$(t 'respect configured gaps')"; row nao "$(t 'snap to the real edge')"; } | FZFM --prompt="$(t 'respect gaps') > ")
+          [ -n "${v:-}" ] && sset snap_respect_gaps "$(mkey "$v")"
+        fi
+        ;;
+      resize)
+        v=$( { row sim "$(t 'dragging the border resizes')"; row nao "$(t 'only SUPER + right button')"; } \
+          | FZFM --prompt="$(t 'resize on border') > "); [ -n "${v:-}" ] && sset resize_border "$(mkey "$v")"
+        ;;
+      activation)
+        v=$( { row nao "$(t 'prevents focus stealing (recommended)')"; row sim "$(t 'apps may bring their window forward')"; } \
+          | FZFM --prompt="$(t 'focus request') > "); [ -n "${v:-}" ] && sset focus_activate "$(mkey "$v")"
+        ;;
+      split)
+        v=$( { row sim "$(t 'keeps the chosen split')"; row nao "$(t 'recomputes with the size')"; } \
+          | FZFM --prompt="$(t 'preserve split') > "); [ -n "${v:-}" ] && sset preserve_split "$(mkey "$v")"
+        ;;
+      back|"") break;;
+    esac
+    render >/dev/null 2>&1
+  done
+}
+
+pick_workspaces(){
+  local c v changed
+  while true; do
+    c=$( {
+      row count      "$(t 'count') · $(sget workspace_count) $(t 'numbered areas')"
+      row persistent "$(t 'persistent') · $(sget workspace_persistent)"
+      row smartgaps  "smart-gaps · $(sget workspace_smart_gaps)"
+      row layout     "$(t 'layout') · $(sget workspace_layout)"
+      row gap        "$(t 'gap') · $(sget workspace_gap)px $(t 'between areas')"
+      row wrap       "$(t 'wrap') · $(sget workspace_wrap)"
+      row backforth  "$(t 'back-and-forth') · $(sget workspace_backforth)"
+      row back       "$(t 'back')"
+      } | FZFM --prompt="$(t 'workspaces') > " \
+          --header="$(t 'rules, shortcuts and workspace behavior')" )
+    changed=0
+    case "$(mkey "$c")" in
+      count)
+        v=$(printf '%s\n' "4  $(t 'compact')" "5 " "6 " "7 " "8 " "9  $(t 'default (SUPER+1..9)')" "10 $(t 'includes SUPER+0')" \
+          | FZF --prompt="$(t 'number of areas') > ")
+        [ -n "${v:-}" ] && { sset workspace_count "${v%% *}"; changed=1; }
+        ;;
+      persistent)
+        v=$( { row nao "$(t 'empty areas disappear')"; row sim "$(t 'keep all numbered areas')"; } \
+          | FZFM --prompt="$(t 'persistent areas') > ")
+        [ -n "${v:-}" ] && { sset workspace_persistent "$(mkey "$v")"; changed=1; }
+        ;;
+      smartgaps)
+        v=$( { row nao "$(t 'always keep border and gaps')"; row sim "$(t 'drop border and gaps with a single tiled window')"; } \
+          | FZFM --prompt="smart gaps > ")
+        [ -n "${v:-}" ] && { sset workspace_smart_gaps "$(mkey "$v")"; changed=1; }
+        ;;
+      layout)
+        v=$( { row global "$(t 'follow the general window layout')"; row dwindle "$(t 'dynamic tree everywhere')"; \
+               row master "$(t 'one master window everywhere')"; row scrolling "$(t 'scrolling columns everywhere')"; } \
+          | FZFM --prompt="$(t 'workspace layout') > ")
+        [ -n "${v:-}" ] && { sset workspace_layout "$(mkey "$v")"; changed=1; }
+        ;;
+      gap)
+        v=$(printf '%s\n' "0  $(t 'no extra space')" "2  $(t 'minimal')" "4  $(t 'discreet')" "8  $(t 'visible')" "12 $(t 'wide')" "20 $(t 'very wide')" \
+          | FZF --prompt="$(t 'gap between workspaces') > " \
+            --header="$(t 'mostly visible during the transition')")
+        [ -n "${v:-}" ] && { sset workspace_gap "${v%% *}"; changed=1; }
+        ;;
+      wrap)
+        v=$( { row nao "$(t 'animation follows numeric order')"; row sim "$(t 'shortest visual path at the ends')"; } \
+          | FZFM --prompt="$(t 'wrap transition') > ")
+        [ -n "${v:-}" ] && { sset workspace_wrap "$(mkey "$v")"; changed=1; }
+        ;;
+      backforth)
+        v=$( { row sim "$(t 'repeat the shortcut returns to the previous area')"; row nao "$(t 'repeating keeps the current area')"; } \
+          | FZFM --prompt="$(t 'back to previous area') > ")
+        [ -n "${v:-}" ] && { sset workspace_backforth "$(mkey "$v")"; changed=1; }
+        ;;
+      back|"") break ;;
+    esac
+    [ "$changed" -eq 1 ] && render >/dev/null 2>&1
+  done
+  ok "workspaces: $(sget workspace_count) · $(t 'persistent') $(sget workspace_persistent) · smart-gaps $(sget workspace_smart_gaps) · $(t 'layout') $(sget workspace_layout) · $(t 'wrap') $(sget workspace_wrap)"
+}
+
+pick_entrada(){
+  local c v layout variant
+  while true; do
+    c=$( {
+      row keyboard    "$(t 'keyboard') · $(sget kb_layout) / $(sget kb_variant)"
+      row focus       "$(t 'focus') · $(t 'mouse mode') $(sget follow_mouse)"
+      row sensitivity "$(t 'sensitivity') · $(sget mouse_sensitivity)"
+      row wheel       "$(t 'wheel') · $(t 'speed') $(sget mouse_scroll), $(t 'natural') $(sget mouse_natural)"
+      row touchscroll "touch-scroll · $(t 'speed') $(sget touch_scroll), $(t 'natural') $(sget touch_natural)"
+      row touchtap    "$(t 'touch-tap') · $(t 'tap to click') $(sget touch_tap)"
+      row touchtype   "$(t 'touch-typing') · $(t 'disable while typing') $(sget touch_dwt)"
+      row gestures    "$(t 'gestures') · $(sget gesture_fingers) $(t 'fingers to switch area')"
+      row back        "$(t 'back')"
+      } | FZFM --prompt="$(t 'keyboard, mouse and touchpad') > " \
+          --header="$(t 'all values are applied by Hyprland')" )
+    case "$(mkey "$c")" in
+      keyboard)
+        v=$(printf '%s\n' \
+          "br thinkpad   $(t 'Portuguese Brazil, ThinkPad')" \
+          "br nodeadkeys $(t 'Portuguese Brazil, no dead keys')" \
+          "us intl       $(t 'US English, international')" \
+          "us altgr-intl $(t 'US English, international AltGr')" \
+          | FZF --prompt="$(t 'keyboard layout') > ")
+        if [ -n "${v:-}" ]; then
+          layout=$(awk '{print $1}' <<<"$v"); variant=$(awk '{print $2}' <<<"$v")
+          sset kb_layout "$layout"; sset kb_variant "$variant"
+        fi
+        ;;
+      focus)
+        v=$(printf '%s\n' \
+          "0  $(t 'focus changes on click')" \
+          "1  $(t 'focus follows the pointer (current/recommended)')" \
+          "2  $(t 'pointer and keyboard separate; click gives focus')" \
+          | FZF --prompt="$(t 'mouse focus') > ")
+        [ -n "${v:-}" ] && sset follow_mouse "${v%% *}"
+        ;;
+      sensitivity)
+        v=$(printf '%s\n' "-1.0 $(t 'very slow')" "-0.5 $(t 'slower')" "0 $(t 'normal')" "0.5 $(t 'faster')" "1.0 $(t 'very fast')" \
+          | FZF --prompt="$(t 'sensitivity') > ")
+        [ -n "${v:-}" ] && sset mouse_sensitivity "${v%% *}"
+        ;;
+      wheel)
+        v=$( { row nao "$(t 'traditional scrolling')"; row sim "$(t 'natural/inverted scrolling')"; } | FZFM --prompt="$(t 'natural mouse scroll') > ")
+        [ -n "${v:-}" ] && sset mouse_natural "$(mkey "$v")"
+        v=$(printf '%s\n' "0.50 $(t 'slow')" "0.75 $(t 'soft')" "1.00 $(t 'normal')" "1.25 $(t 'fast')" "1.50 $(t 'very fast')" "2.00 $(t 'super fast')" | FZF --prompt="$(t 'wheel speed') > ")
+        [ -n "${v:-}" ] && sset mouse_scroll "${v%% *}"
+        ;;
+      touchscroll)
+        v=$( { row sim "$(t 'content follows the fingers')"; row nao "$(t 'traditional scrolling')"; } | FZFM --prompt="$(t 'natural touchpad scroll') > ")
+        [ -n "${v:-}" ] && sset touch_natural "$(mkey "$v")"
+        v=$(printf '%s\n' "0.50 $(t 'slow')" "0.75 $(t 'soft')" "1.00 $(t 'normal')" "1.25 $(t 'fast')" "1.50 $(t 'very fast')" "2.00 $(t 'super fast')" | FZF --prompt="$(t 'touchpad speed') > ")
+        [ -n "${v:-}" ] && sset touch_scroll "${v%% *}"
+        ;;
+      touchtap)
+        v=$( { row sim "$(t 'a tap equals a click')"; row nao "$(t 'requires pressing the touchpad')"; } | FZFM --prompt="$(t 'tap to click') > ")
+        [ -n "${v:-}" ] && sset touch_tap "$(mkey "$v")"
+        ;;
+      touchtype)
+        v=$( { row sim "$(t 'avoids accidental taps while typing')"; row nao "$(t 'touchpad always active')"; } | FZFM --prompt="$(t 'touchpad while typing') > ")
+        [ -n "${v:-}" ] && sset touch_dwt "$(mkey "$v")"
+        ;;
+      gestures)
+        v=$(printf '%s\n' "3  $(t 'three fingers')" "4  $(t 'four fingers')" | FZF --prompt="$(t 'gesture fingers') > ")
+        [ -n "${v:-}" ] && sset gesture_fingers "${v%% *}"
+        ;;
+      back|"") break;;
+    esac
+    render >/dev/null 2>&1
+  done
+}
+
+cursor_themes(){
+  find /usr/share/icons "$HOME/.local/share/icons" "$HOME/.icons" \
+    -maxdepth 2 -type d -name cursors -printf '%h\n' 2>/dev/null \
+    | sed 's#/$##' | xargs -r -n1 basename | sort -u
+}
+
+pick_cursor(){
+  local c v
+  while true; do
+    c=$( {
+      row theme   "$(t 'theme') · $(sget cursor_theme)"
+      row size    "$(t 'size') · $(sget cursor_size)px"
+      row typing  "$(t 'typing') · $(t 'hide while typing') $(sget cursor_hide_key)"
+      row idle    "$(t 'idle') · $(t 'hide after') $(sget cursor_timeout)s (0 = $(t 'never'))"
+      row back    "$(t 'back')"
+      } | FZFM --prompt="$(t 'cursor') > " \
+          --header="$(t 'theme and size change live; some apps need a restart')" )
+    case "$(mkey "$c")" in
+      theme)
+        v=$(cursor_themes | FZF --prompt="$(t 'cursor theme') > ")
+        [ -n "${v:-}" ] && sset cursor_theme "$v"
+        ;;
+      size)
+        v=$(printf '%s\n' "16 $(t 'small')" "20 $(t 'compact')" "24 $(t 'normal')" "28 $(t 'medium')" "32 $(t 'large')" "40 $(t 'accessible')" "48 $(t 'very large')" | FZF --prompt="$(t 'cursor size') > ")
+        [ -n "${v:-}" ] && sset cursor_size "${v%% *}"
+        ;;
+      typing)
+        v=$( { row nao "$(t 'cursor always visible')"; row sim "$(t 'hide until the mouse moves')"; } | FZFM --prompt="$(t 'hide while typing') > ")
+        [ -n "${v:-}" ] && sset cursor_hide_key "$(mkey "$v")"
+        ;;
+      idle)
+        v=$(printf '%s\n' "0  $(t 'never hide')" "2  $(t 'after 2 seconds')" "5  $(t 'after 5 seconds')" "10 $(t 'after 10 seconds')" "30 $(t 'after 30 seconds')" | FZF --prompt="$(t 'idle time') > ")
+        [ -n "${v:-}" ] && sset cursor_timeout "${v%% *}"
+        ;;
+      back|"") break;;
+    esac
+    render >/dev/null 2>&1
+  done
+}
+
+pick_bloqueio(){
+  local c v
+  while true; do
+    c=$( {
+      row brightness "$(t 'brightness') · $(sget lock_brightness)% $(t 'of the wallpaper')"
+      row blur       "$(t 'blur') · $(sget lock_blur) $(t 'passes')"
+      row clock      "$(t 'clock') · $(t 'show time and date') $(sget lock_clock)"
+      row cursor     "$(t 'cursor') · $(t 'hide on the locked screen') $(sget lock_hide_cursor)"
+      row test       "$(t 'test') · $(t 'open hyprlock now')"
+      row back       "$(t 'back')"
+      } | FZFM --prompt="$(t 'lock screen') > " \
+          --header="$(t 'customizes hyprlock without changing your password')" )
+    case "$(mkey "$c")" in
+      brightness)
+        v=$(printf '%s\n' "25 $(t 'very dark')" "35 $(t 'dark')" "50 $(t 'balanced')" "65 $(t 'light')" "80 $(t 'very light')" "100 $(t 'original')" | FZF --prompt="$(t 'background brightness') > ")
+        [ -n "${v:-}" ] && sset lock_brightness "${v%% *}"
+        ;;
+      blur)
+        v=$(printf '%s\n' "0  $(t 'no blur')" "1  $(t 'light')" "2  $(t 'medium')" "3  $(t 'strong')" "4  $(t 'very strong')" | FZF --prompt="$(t 'background blur') > ")
+        [ -n "${v:-}" ] && sset lock_blur "${v%% *}"
+        ;;
+      clock)
+        v=$( { row sim "$(t 'show time and date')"; row nao "$(t 'user and password only')"; } | FZFM --prompt="$(t 'clock') > ")
+        [ -n "${v:-}" ] && sset lock_clock "$(mkey "$v")"
+        ;;
+      cursor)
+        v=$( { row sim "$(t 'hide the cursor')"; row nao "$(t 'keep it visible')"; } | FZFM --prompt="$(t 'cursor on lock') > ")
+        [ -n "${v:-}" ] && sset lock_hide_cursor "$(mkey "$v")"
+        ;;
+      test)
+        render >/dev/null 2>&1
+        have hyprlock && setsid hyprlock >/dev/null 2>&1 < /dev/null &
+        break
+        ;;
+      back|"") break;;
+    esac
+    render >/dev/null 2>&1
+  done
+}
+
+pick_notificacoes(){
+  local c v
+  while true; do
+    c=$( {
+      row position "$(t 'position') · $(sget notif_position)"
+      row width    "$(t 'width') · $(sget notif_width)px"
+      row timeout  "$(t 'timeout') · $(sget notif_timeout)s"
+      row icons    "$(t 'icons') · $(sget notif_icons)"
+      row test     "$(t 'test') · $(t 'send a sample notification')"
+      row back     "$(t 'back')"
+      } | FZFM --prompt="$(t 'notifications') > " \
+          --header="$(t 'dunst appearance; critical alerts never auto-dismiss')" )
+    case "$(mkey "$c")" in
+      position)
+        v=$(printf '%s\n' "top-left $(t 'top left')" "top-center $(t 'top center')" \
+          "top-right $(t 'top right')" "bottom-left $(t 'bottom left')" \
+          "bottom-center $(t 'bottom center')" "bottom-right $(t 'bottom right')" \
+          | FZF --prompt="$(t 'position') > ")
+        [ -n "${v:-}" ] && sset notif_position "${v%% *}"
+        ;;
+      width)
+        v=$(printf '%s\n' "280 $(t 'compact')" "320 $(t 'small')" "360 $(t 'normal')" "420 $(t 'wide')" "500 $(t 'very wide')" | FZF --prompt="$(t 'width') > ")
+        [ -n "${v:-}" ] && sset notif_width "${v%% *}"
+        ;;
+      timeout)
+        v=$(printf '%s\n' "3 $(t 'short')" "5 $(t 'quick')" "8 $(t 'normal')" "12 $(t 'long')" "20 $(t 'very long')" | FZF --prompt="$(t 'duration') > ")
+        [ -n "${v:-}" ] && sset notif_timeout "${v%% *}"
+        ;;
+      icons)
+        v=$( { row sim "$(t 'show the app icon')"; row nao "$(t 'title and text only')"; } | FZFM --prompt="$(t 'icons') > ")
+        [ -n "${v:-}" ] && sset notif_icons "$(mkey "$v")"
+        ;;
+      test)
+        render >/dev/null 2>&1
+        have notify-send && notify-send 'Hyprism' "$(t 'This is how your notifications will look.')"
+        ;;
+      back|"") break;;
+    esac
+    render >/dev/null 2>&1
+  done
+}
+
+pick_fonte(){
+  local f; f=$( { fc-list : family 2>/dev/null | tr ',' '\n' | grep -iE 'nerd font mono|noto sans|dejavu sans' ; } \
+      | sed 's/^ *//;s/ *$//' | sort -u | FZF --prompt="$(t 'bar font') > ")
+  [ -n "${f:-}" ] && sset barfont "$f"
+  local s; s=$(printf '%s\n' 10 11 "12  $(t 'recommended')" 13 14 | FZF --prompt="$(t 'size') > ")
+  [ -n "${s:-}" ] && sset barsize "${s%% *}"
+  render; ok "$(t 'font'): $(sget barfont) $(sget barsize)"
+}
+
+show_binds(){
+  cat <<EOF
+
+  $(t 'LAUNCH')
+    SUPER + Space ......... $(t 'launcher (rofi)')
+    SUPER + Enter ......... $(t 'terminal')
+    SUPER + E ............. $(t 'files')
+    SUPER + Tab ........... $(t 'open windows')
+    SUPER + R ............. $(t 'run a command')
+
+  $(t 'WINDOW')
+    SUPER + Q ............. $(t 'close')
+    SUPER + F ............. $(t 'fullscreen')
+    SUPER + M ............. $(t 'maximize (respects the bar)')
+    SUPER + C ............. $(t 'center')
+    SUPER + V ............. $(t 'toggle floating/tiled')
+    SUPER + CTRL + arrows . $(t 'resize')
+    SUPER + ALT  + arrows . $(t 'move')
+    SUPER + SHIFT + arrows  $(t 'snap to half the screen')
+    SUPER + right button .. $(t 'resize with the mouse')
+    drag the border ....... $(t 'resize with the mouse')
+
+  $(t 'WORKSPACES')
+    SUPER + 1..9 .......... $(t 'switch (and 0 when a tenth exists)')
+    SUPER + SHIFT + number  $(t 'move the window')
+
+  $(t 'SYSTEM')
+    SUPER + L ............. $(t 'lock')
+    SUPER + SHIFT + S ..... $(t 'screenshot region')
+    PrintScreen ........... $(t 'full screen')
+    SUPER + SHIFT + Q ..... $(t 'exit the session')
+
+EOF
+  read -rp "  [enter] " _
+}
+
+save_preset(){
+  local n; read -rp "  $(t 'preset name'): " n
+  [ -z "${n:-}" ] && return 0
+  { cat "$SET"; printf 'paleta=%s\n' "$(cat "$STATE" 2>/dev/null)"
+    printf 'wallpaper=%s\n' "$(cat "$WALLFILE" 2>/dev/null)"; } > "$PRESETS/$n.preset"
+  ok "$(t 'saved'): $n"
+}
+
+load_preset(){
+  local sel; sel=$(find "$PRESETS" -name '*.preset' -printf '%f\n' 2>/dev/null | sed 's/\.preset$//' | sort \
+      | FZF --prompt="$(t 'preset') > " --preview "cat $PRESETS/{1}.preset" --preview-window='right,48%')
+  [ -z "${sel:-}" ] && return 0
+  local f="$PRESETS/$sel.preset"
+  grep -vE '^(paleta|wallpaper)=' "$f" > "$SET"
+  local p w; p=$(grep -m1 '^paleta=' "$f" | cut -d= -f2-); w=$(grep -m1 '^wallpaper=' "$f" | cut -d= -f2-)
+  [ -n "$p" ] && printf '%s\n' "$p" > "$STATE"
+  if [ -n "$w" ] && [ -f "$w" ]; then
+    printf '%s\n' "$w" > "$WALLFILE"
+    apply_wall_now "$w"; write_hyprpaper "$w"
+  fi
+  render; ok "$(t 'preset applied'): $sel"
+}
+
+pick_preset(){
+  local c; c=$( {
+      row save "$(t 'save the current look under a name')"
+      row load "$(t 'apply a saved preset')"
+      } | FZFM --prompt="$(t 'presets') > ")
+  case "$(mkey "$c")" in save) save_preset;; load) load_preset;; esac
+}
+
+sync_global(){
+  # The source of truth is Hyprland's active palette. This never pulls colors
+  # from a consumer: it reapplies the global theme and tells Kitty/Rofi to follow.
+  local h failed=0
+  h=$(cat "$STATE" 2>/dev/null)
+  [ -n "$h" ] || { err "$(t 'Hyprland has no active global theme')"; return 1; }
+  [ -f "$PAL/$h.env" ] || { err "$(t 'global palette') \"$h\" $(t 'does not exist')"; return 1; }
+
+  render || return 1
+
+  if have kittytheme; then
+    kittytheme sync >/dev/null 2>&1 || { err "$(t 'failed to sync Kitty')"; failed=1; }
+  else
+    warn "$(t 'kittytheme not found; Kitty was not changed')"; failed=1
+  fi
+  if have rofitheme; then
+    rofitheme sync >/dev/null 2>&1 || { err "$(t 'failed to sync Rofi')"; failed=1; }
+  else
+    warn "$(t 'rofitheme not found; Rofi was not changed')"; failed=1
+  fi
+
+  [ "$failed" -eq 0 ] && ok "$(t 'global theme') $h $(t 'propagated: Hyprland → Kitty + Rofi')"
+  return "$failed"
+}
+
+show_config(){
+  local L=13
+  echo
+  printf "%-${L}s %s\n" "$(t 'palette')"       "$(cat "$STATE" 2>/dev/null || echo '-')"
+  printf "%-${L}s %s\n" "$(t 'wallpaper')"     "$(basename "$(cat "$WALLFILE" 2>/dev/null || echo '-')")"
+  printf "%-${L}s %s px\n" "$(t 'border')"     "$(sget border)"
+  printf "%-${L}s %s px | $(t 'power') %s\n" "$(t 'corners')" "$(sget rounding)" "$(sget rounding_power)"
+  printf "%-${L}s %s / %s\n" "$(t 'spacing')"  "$(sget gaps_in)" "$(sget gaps_out)"
+  printf "%-${L}s %s\n" "blur"                 "$(sget blur)"
+  printf "%-${L}s xray %s | $(t 'brightness') %s | $(t 'vibrancy') %s\n" "$(t 'advanced blur')" \
+    "$(sget blur_xray)" "$(sget blur_brightness)" "$(sget blur_vibrancy)"
+  printf "%-${L}s %s\n" "$(t 'shadow')"        "$(sget shadow)"
+  printf "%-${L}s $(t 'range') %s | $(t 'power') %s | $(t 'scale') %s | offset %s,%s\n" "$(t 'shadow cfg')" \
+    "$(sget shadow_range)" "$(sget shadow_power)" "$(sget shadow_scale)" \
+    "$(sget shadow_offset_x)" "$(sget shadow_offset_y)"
+  printf "%-${L}s $(t 'active') %s%% | $(t 'inactive') %s%% | $(t 'fullscreen') %s%%\n" "$(t 'opacity')" \
+    "$(sget active_op)" "$(sget inactive_op)" "$(sget fullscreen_op)"
+  printf "%-${L}s %s | $(t 'strength') %s%%\n" "$(t 'dim')" "$(sget dim_inactive)" "$(sget dim_strength)"
+  printf "%-${L}s %s\n" "$(t 'animations')"    "$(sget anim)"
+  printf "%-${L}s %s\n" "$(t 'floating')"      "$(sget float_all)"
+  printf "%-${L}s %s\n" "$(t 'opening')"       "$(sget win_size)"
+  printf "%-${L}s %s | $(t 'snap') %s (%spx) | $(t 'overlap') %s | $(t 'respect gaps') %s\n" "$(t 'layout')" \
+    "$(sget layout)" "$(sget snap)" "$(sget snap_gap)" \
+    "$(sget snap_overlap)" "$(sget snap_respect_gaps)"
+  printf "%-${L}s %s | $(t 'persistent') %s | smart-gaps %s | $(t 'layout') %s | gap %s | $(t 'wrap') %s | $(t 'back-and-forth') %s\n" workspaces \
+    "$(sget workspace_count)" "$(sget workspace_persistent)" \
+    "$(sget workspace_smart_gaps)" "$(sget workspace_layout)" \
+    "$(sget workspace_gap)" "$(sget workspace_wrap)" "$(sget workspace_backforth)"
+  printf "%-${L}s %s, %spx, %s, %s %s\n" "$(t 'bar')" "$(sget bar_enabled)" "$(sget barh)" "$(sget barpos)" "$(sget barfont)" "$(sget barsize)"
+  printf "%-${L}s %s | $(t 'margin') %s | $(t 'radius') %s | $(t 'gap') %s\n" "$(t 'bar style')" \
+    "$(sget bar_style)" "$(sget bar_margin)" "$(sget bar_radius)" "$(sget bar_gap)"
+  printf "%-${L}s %s %s\n" "$(t 'keyboard')"   "$(sget kb_layout)" "$(sget kb_variant)"
+  printf "%-${L}s $(t 'focus') %s | $(t 'sens') %s | scroll %s\n" "$(t 'mouse')" "$(sget follow_mouse)" "$(sget mouse_sensitivity)" "$(sget mouse_scroll)"
+  printf "%-${L}s $(t 'natural') %s | $(t 'tap') %s | $(t 'while typing') %s | scroll %s\n" "$(t 'touchpad')" \
+    "$(sget touch_natural)" "$(sget touch_tap)" "$(sget touch_dwt)" "$(sget touch_scroll)"
+  printf "%-${L}s %s %spx | $(t 'idle') %ss\n" "$(t 'cursor')" "$(sget cursor_theme)" "$(sget cursor_size)" "$(sget cursor_timeout)"
+  printf "%-${L}s $(t 'brightness') %s%% | blur %s | $(t 'clock') %s\n" "$(t 'lock')" \
+    "$(sget lock_brightness)" "$(sget lock_blur)" "$(sget lock_clock)"
+  printf "%-${L}s %s | %spx | %ss | $(t 'icons') %s\n" "$(t 'notifications')" \
+    "$(sget notif_position)" "$(sget notif_width)" "$(sget notif_timeout)" "$(sget notif_icons)"
+  printf "%-${L}s %s\n" "$(t 'language')"      "$(sget lang)"
+  printf "%-${L}s %s\n" "kitty"               "$(cat "$KTD/.active" 2>/dev/null || echo '-')"
+  printf "%-${L}s %s\n" "rofi"                "$(cat "$HOME/.config/rofi/themes/.active" 2>/dev/null || echo '-')"
+  echo; read -rp "  [enter] " _
+}
+
+pick_lang(){
+  local v; v=$( { row en "$(t 'English')"; row pt "Português (Portuguese)"; } \
+      | FZFM --prompt="$(t 'language') > " --header="$(t 'the whole interface, either language')" )
+  [ -n "${v:-}" ] || return 0
+  sset lang "$(mkey "$v")"; lang_init
+  ok "$(t 'language'): $(sget lang)"
+}
+
+main_menu(){
+  have fzf || { warn "$(t 'install fzf for the menu, or use: hyprism <palette>')"; palettes; return; }
+  while true; do
+    local c; c=$( {
+      row palette       "$(t 'the colors (Hyprland, Waybar, Hyprlock, Dunst)')"
+      row wallpaper     "$(t 'wallpaper, with a terminal preview')"
+      row borders       "$(t 'window border color')"
+      row appearance    "$(t 'border width, corners and spacing')"
+      row effects       "$(t 'blur, shadow, opacity and focus')"
+      row animations    "$(t 'presets for windows, layers and workspaces')"
+      row bar           "$(t 'height, position and font of the bar')"
+      row style         "$(t 'bar look: flat / pills / segmented + tuning')"
+      row modules       "$(t 'what appears on the bar, item by item')"
+      row windows       "$(t 'opening, layout, snapping and focus')"
+      row workspaces    "$(t 'count, rules, layout and navigation')"
+      row input         "$(t 'keyboard, mouse, touchpad and gestures')"
+      row cursor        "$(t 'theme, size and when to hide')"
+      row lock          "$(t 'background, clock and cursor of hyprlock')"
+      row notifications "$(t 'position, size, timeout and icons')"
+      row font          "$(t 'family and size of the bar')"
+      row lang          "$(t 'interface language (English / Portuguese)')"
+      row binds         "$(t 'see the keybinding list')"
+      row preset        "$(t 'save or load a whole look')"
+      row sync          "$(t 'propagate the global theme to Kitty and Rofi')"
+      row config        "$(t 'see everything active')"
+      row quit          "$(t 'quit')"
+      } | FZFM --prompt='hyprism > ' --height=78% \
+          --header="$(t 'Hyprism · personalization center')" )
+    case "$(mkey "$c")" in
+      palette) pick_palette ;;       wallpaper) pick_wallpaper ;;
+      borders) pick_bordas ;;        appearance) pick_aparencia ;;
+      effects) pick_efeitos ;;       animations) pick_animacoes ;;
+      bar) pick_barra ;;             style) pick_estilo ;;
+      modules) pick_modulos ;;       windows) pick_janelas ;;
+      workspaces) pick_workspaces ;; input) pick_entrada ;;
+      cursor) pick_cursor ;;         lock) pick_bloqueio ;;
+      notifications) pick_notificacoes ;; font) pick_fonte ;;
+      lang) pick_lang ;;             binds) show_binds ;;
+      preset) pick_preset ;;         sync) sync_global ;;
+      config) show_config ;;         quit|"") break ;;
+    esac
+  done
+}
+
+# The wallpaper hot-path must not initialize dozens of options: this keeps each
+# focus event a few milliseconds instead of ~180 ms.
+case "${1:-}" in
+  __wlive)   queue_wall_preview "$WALLDIR/$2"; exit ;;
+  __wworker) wall_preview_worker; exit ;;
+  __wfind)   wall_find; exit ;;
+esac
+
+seed
+lang_init
+case "${1:-}" in
+  __prev)      preview "$2" ;;
+  __wprev)     preview_wall "$2" ;;
+  __bprev)     preview_border "$2" ;;
+  __blive)     border_live "$2" "$(sget border_inactive)" ;;
+  __brprev)    preview_bright "$2" ;;
+  __brlive)    bright_live "$2" ;;
+  -l|--list)   palettes ;;
+  -g|--gerar|--generate)  gen_palettes ;;
+  -r|--random) apply "$(palettes | shuf -n1)" ;;
+  -h|--help|help|ajuda)   usage ;;
+  palette|paleta|theme|tema|colors|cores) pick_palette ;;
+  wallpaper|papel)   pick_wallpaper ;;
+  appearance|aparencia)   pick_aparencia ;;
+  borders|bordas|border|borda)  pick_bordas ;;
+  effects|efeitos|blur)      pick_efeitos "${2:-}" ;;
+  animations|animacoes|anim) pick_animacoes "${2:-}" ;;
+  bar|barra|waybar)      pick_barra ;;
+  style|estilo)      if [ -n "${2:-}" ]; then
+                       bar_style_set "$2" && render && ok "$(t 'style'): $2" \
+                         || err "$(t 'invalid style (use flat, pills or segmented)')"
+                     else pick_estilo; fi ;;
+  modules|modulos)   pick_modulos ;;
+  windows|janelas|comportamento) pick_janelas ;;
+  workspaces|areas|areas-de-trabalho) pick_workspaces ;;
+  input|entrada|touchpad) pick_entrada ;;
+  cursor|ponteiro)   pick_cursor ;;
+  lock|bloqueio|hyprlock) pick_bloqueio ;;
+  notifications|notificacoes|notify|dunst) pick_notificacoes ;;
+  font|fonte)       pick_fonte ;;
+  lang|idioma|language) if [ -n "${2:-}" ]; then
+                          case "$2" in en|pt) sset lang "$2"; lang_init; ok "$(t 'language'): $2" ;;
+                            *) err "$(t 'invalid language (use en or pt)')" ;; esac
+                        else pick_lang; fi ;;
+  binds|atalhos)    show_binds ;;
+  preset|presets)   pick_preset ;;
+  sync)             sync_global ;;
+  config)           show_config ;;
+  render)           render; ok "$(t 'reapplied')" ;;
+  "")               if have visualconf; then exec visualconf hyprland; else main_menu; fi ;;
+  *) if [ -f "$PAL/$1.env" ]; then apply "$1"
+     else err "$(t 'unknown option or palette'): $1"; main_menu; fi ;;
+esac

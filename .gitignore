@@ -1,0 +1,4 @@
+# Runtime caches / state (not part of the project)
+*.swp
+*~
+.DS_Store
