@@ -227,6 +227,11 @@ def palette():
     p.setdefault("fg", "#c9c9c9"); p.setdefault("dim", "#7a7a7a")
     p.setdefault("line", "#202020"); p.setdefault("accent", "#4c4c4c")
     p.setdefault("accent_lit", "#8a8a8a"); p.setdefault("sel", "#3a0000")
+    # on-accent (text on the selection); parsed if present, else white
+    m = re.search(r'on_accent\s*=\s*"(#[0-9A-Fa-f]{6})"',
+                  open(os.path.join(HOME, ".config/hypr/colors.lua")).read()
+                  if os.path.exists(os.path.join(HOME, ".config/hypr/colors.lua")) else "")
+    p["onacc"] = m.group(1) if m else "#ffffff"
     return p
 
 
@@ -246,28 +251,29 @@ def css_for(p):
     # Mono, square corners, and a dark-red selection with a 2px left accent bar.
     # A very subtle gradient keeps the selection from looking flat-dead.
     p = dict(p)
-    p["sel2"] = _lighten(p["sel"], 30)
+    p.setdefault("onacc", "#ffffff")
     return ("""
 menu, .menu {
   background-color: %(bg)s;
   border: 1px solid %(accent)s;
-  padding: 4px 0px;
+  padding: 1px;
   border-radius: 0;
 }
 menuitem {
   color: %(fg)s;
-  padding: 5px 16px 5px 14px;
+  padding: 1px 14px 1px 7px;
+  min-height: 0;
   border-left: 2px solid transparent;
   border-radius: 0;
 }
-menuitem label { color: %(fg)s; font-family: "FiraCode Nerd Font Mono", "Symbols Nerd Font", monospace; font-size: 11pt; }
+menuitem label { color: %(fg)s; font-family: "FiraCode Nerd Font Mono", "Symbols Nerd Font", monospace; font-size: 10pt; }
 menuitem:hover, menuitem:selected {
-  background-image: linear-gradient(to bottom, %(sel)s, %(sel2)s);
+  background-color: %(sel)s;
   border-left: 2px solid %(accent_lit)s;
 }
-menuitem:hover label, menuitem:selected label { color: #ffffff; }
-menuitem arrow { color: %(accent_lit)s; }
-separator { background-color: %(line)s; min-height: 1px; margin: 4px 0px; }
+menuitem:hover label, menuitem:selected label { color: %(onacc)s; }
+menuitem arrow { color: %(accent_lit)s; min-height: 0; }
+separator { background-color: %(line)s; min-height: 1px; margin: 2px 0px; }
 """ % p).encode()
 
 
@@ -503,43 +509,11 @@ class Desktop:
     def on_button(self, widget, event):
         if event.button != 3:
             return False
-        # Preferred: jgmenu — the BlackArch/fluxbox cascading menu, themed from
-        # the active palette. Opens at the pointer from a cached menu file (fast).
-        if shutil.which("jgmenu"):
-            p = self.jgmenu_proc
-            if p is not None and p.poll() is None:
-                # already open -> a second right-click dismisses it
-                try:
-                    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
-                except (ProcessLookupError, PermissionError, OSError):
-                    pass
-                self.jgmenu_proc = None
-                return True
-            if not os.path.exists(CACHE):
-                regen_cache(background=False)
-            # Deterministic placement: jgmenu's own --at-pointer reads the X11
-            # pointer, which is unreliable under XWayland. Query the real cursor
-            # (hyprctl, global coords) and pin the menu there via a fixed config.
-            x, y = cursor_pos(event)
-            cfg = position_config(x, y)
-            # --simple reads the menu from stdin; feed it the cached file.
-            try:
-                fin = open(CACHE, "rb")
-            except OSError:
-                fin = None
-            try:
-                self.jgmenu_proc = subprocess.Popen(
-                    ["jgmenu", "--simple", "--config-file", cfg],
-                    stdin=(fin or DEVNULL), stdout=DEVNULL, stderr=DEVNULL,
-                    start_new_session=True)
-            except OSError:
-                self.jgmenu_proc = None
-            if fin is not None:
-                fin.close()
-            regen_cache(background=True)  # refresh for next time
-            return True
-        # Fallback (jgmenu not installed): the native GTK menu. Raise this
-        # surface to the overlay layer so the popup renders above windows.
+        # Native GTK menu. It opens EXACTLY at the cursor (popup_at_pointer),
+        # cascades submenus to the right on hover, and closes on click-away — all
+        # reliable on Hyprland/Wayland. (jgmenu was dropped here: its X11 windows
+        # are repositioned by the compositor, so it never lands at the click.)
+        # Raise this surface to the overlay layer so the popup is above windows.
         self._active = widget
         GtkLayerShell.set_keyboard_mode(widget, GtkLayerShell.KeyboardMode.ON_DEMAND)
         GtkLayerShell.set_layer(widget, GtkLayerShell.Layer.OVERLAY)
