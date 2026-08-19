@@ -2525,6 +2525,62 @@ net_status(){
     echo; nmcli device status 2>/dev/null | sed 's/^/  /'
   } | ${PAGER:-less -R}
 }
+# Native fixed IP / DNS / VLAN via nmcli — no external editor needed.
+net_fixed(){
+  have nmcli || { err "$(t 'nmcli not found')"; return; }
+  local con; con=$(nmcli -t -f NAME con show 2>/dev/null | FZF --prompt="$(t 'connection') > ")
+  [ -n "${con:-}" ] || return 0
+  while true; do
+    local m4 addr gw dns c
+    m4=$(nmcli -g ipv4.method con show "$con" 2>/dev/null)
+    addr=$(nmcli -g ipv4.addresses con show "$con" 2>/dev/null)
+    gw=$(nmcli -g ipv4.gateway con show "$con" 2>/dev/null)
+    dns=$(nmcli -g ipv4.dns con show "$con" 2>/dev/null)
+    c=$( {
+      row dhcp   "$(t 'automatic (DHCP)')"
+      row manual "$(t 'manual: IP / gateway / DNS')"
+      row dnsx   "$(t 'DNS only')"
+      row vlan   "$(t 'create a VLAN')"
+      row extern "$(t 'advanced editor (nm-connection-editor)')"
+      row back   "$(t 'back')"
+      } | FZFM --prompt="$con > " \
+          --header="method ${m4:-—} · ip ${addr:-—} · gw ${gw:-—} · dns ${dns:-—}" )
+    case "$(mkey "$c")" in
+      dhcp)
+        nmcli con mod "$con" ipv4.method auto ipv4.addresses "" ipv4.gateway "" ipv4.dns "" ipv4.ignore-auto-dns no >/dev/null 2>&1
+        nmcli con up "$con" >/dev/null 2>&1 && ok "$(t 'set to DHCP'): $con" || err "$(t 'failed')" ;;
+      manual)
+        local a g d
+        printf '  %s: ' "$(t 'IP/prefix (e.g. 192.168.1.50/24)')"; read -r a; [ -n "${a:-}" ] || continue
+        printf '  %s: ' "$(t 'gateway (optional)')"; read -r g
+        printf '  %s: ' "$(t 'DNS, space-separated (optional)')"; read -r d
+        nmcli con mod "$con" ipv4.method manual ipv4.addresses "$a" >/dev/null 2>&1
+        [ -n "${g:-}" ] && nmcli con mod "$con" ipv4.gateway "$g" >/dev/null 2>&1
+        [ -n "${d:-}" ] && nmcli con mod "$con" ipv4.dns "$d" ipv4.ignore-auto-dns yes >/dev/null 2>&1
+        nmcli con up "$con" >/dev/null 2>&1 && ok "$(t 'fixed IP set'): $a" || err "$(t 'failed (check the values)')" ;;
+      dnsx)
+        local d; printf '  %s: ' "$(t 'DNS, space-separated')"; read -r d; [ -n "${d:-}" ] || continue
+        nmcli con mod "$con" ipv4.dns "$d" ipv4.ignore-auto-dns yes >/dev/null 2>&1
+        nmcli con up "$con" >/dev/null 2>&1 && ok "$(t 'DNS set'): $d" || err "$(t 'failed')" ;;
+      vlan) net_vlan ;;
+      extern) have nm-connection-editor && launch_gui nm-connection-editor ;;
+      back|"") break ;;
+    esac
+  done
+}
+net_vlan(){
+  local dev id name
+  dev=$(nmcli -t -f DEVICE,TYPE device status 2>/dev/null \
+      | awk -F: '$2=="ethernet"||$2=="wifi"{print $1}' \
+      | FZF --prompt="$(t 'parent device') > ")
+  [ -n "${dev:-}" ] || return 0
+  printf '  %s: ' "$(t 'VLAN id (1-4094)')"; read -r id
+  case "$id" in ''|*[!0-9]*) return 0 ;; esac
+  name="vlan${id}-${dev}"
+  nmcli con add type vlan con-name "$name" dev "$dev" id "$id" >/dev/null 2>&1 \
+    && ok "$(t 'VLAN created'): $name" || err "$(t 'failed to create the VLAN')"
+}
+
 net_module(){
   if ! have nmcli; then
     warn "$(t 'nmcli not found; opening the legacy net-tui')"
@@ -2535,15 +2591,14 @@ net_module(){
     c=$( {
       row wifi     "$(t 'Wi-Fi: scan, connect, forget')"
       row vpn      "$(t 'VPN and tunnels')"
-      row editor   "$(t 'advanced: fixed IP, DNS, routes (editor)')"
+      row fixed    "$(t 'fixed IP, DNS, VLAN')"
       row hostname "$(t 'machine name')"
       row status   "$(t 'detailed status')"
       row back     "$(t 'back')"
       } | FZFM --prompt="$(t 'network') > " --header="$head" )
     case "$(mkey "$c")" in
       wifi) net_wifi ;;   vpn) net_vpn ;;
-      editor) have nm-connection-editor && launch_gui nm-connection-editor \
-                || { have nmtui && launch_term nmtui; } ;;
+      fixed) net_fixed ;;
       hostname) net_hostname ;;
       status) net_status ;;
       back|"") break ;;
