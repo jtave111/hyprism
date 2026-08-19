@@ -414,6 +414,48 @@ def regen_cache(background=True):
         pass
 
 
+def cursor_pos(event):
+    """Global cursor position. hyprctl is authoritative on Hyprland; fall back
+    to the GTK event's root coords."""
+    out = run(["hyprctl", "cursorpos"])
+    try:
+        xs, ys = out.strip().split(",")
+        return int(xs.strip()), int(ys.strip())
+    except (ValueError, AttributeError):
+        try:
+            return int(event.x_root), int(event.y_root)
+        except Exception:
+            return 0, 0
+
+
+def position_config(x, y):
+    """A one-shot jgmenu config: the themed rc with the position pinned to
+    (x, y). jgmenu's own --at-pointer misreads the pointer under XWayland, so we
+    place the menu ourselves at the real cursor."""
+    try:
+        base = open(JGMENU_RC).read().splitlines()
+    except OSError:
+        base = []
+    drop = ("position_mode", "menu_margin_x", "menu_margin_y",
+            "menu_valign", "menu_halign")
+    lines = [ln for ln in base if not any(ln.lstrip().startswith(k) for k in drop)]
+    lines += [
+        "position_mode = fixed",
+        "menu_valign = top",
+        "menu_halign = left",
+        "menu_margin_x = %d" % max(0, x),
+        "menu_margin_y = %d" % max(0, y),
+    ]
+    path = os.path.join(CACHE_DIR, "jgmenu-pos.rc")
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+        return path
+    except OSError:
+        return JGMENU_RC
+
+
 class Desktop:
     def __init__(self):
         apply_css()
@@ -475,6 +517,11 @@ class Desktop:
                 return True
             if not os.path.exists(CACHE):
                 regen_cache(background=False)
+            # Deterministic placement: jgmenu's own --at-pointer reads the X11
+            # pointer, which is unreliable under XWayland. Query the real cursor
+            # (hyprctl, global coords) and pin the menu there via a fixed config.
+            x, y = cursor_pos(event)
+            cfg = position_config(x, y)
             # --simple reads the menu from stdin; feed it the cached file.
             try:
                 fin = open(CACHE, "rb")
@@ -482,8 +529,7 @@ class Desktop:
                 fin = None
             try:
                 self.jgmenu_proc = subprocess.Popen(
-                    ["jgmenu", "--simple", "--at-pointer",
-                     "--config-file", JGMENU_RC],
+                    ["jgmenu", "--simple", "--config-file", cfg],
                     stdin=(fin or DEVNULL), stdout=DEVNULL, stderr=DEVNULL,
                     start_new_session=True)
             except OSError:

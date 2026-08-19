@@ -209,9 +209,10 @@ def emit():
     tag("terms", ["%s,%s" % (t, t) for t in TERMINALS if shutil.which(t)] or ["(none),:"])
     tag("browsers", ["%s,%s" % (b, b) for b in BROWSERS if shutil.which(b)] or ["(none),:"])
 
+    # No blank lines between blocks: jgmenu treats a blank line as an empty
+    # item, which shows up as empty rows/columns.
     out = list(ROOT)
     for block in TAGS:
-        out.append("")
         out.extend(block)
     sys.stdout.write("\n".join(out) + "\n")
 
