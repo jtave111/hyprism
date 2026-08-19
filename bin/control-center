@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# =====================================================================
+#  control-center — o "Configurações do Sistema" do Hyprland, em rofi.
+#
+#  Junta num lugar so o que no KDE ficava espalhado: rede, som,
+#  bluetooth, telas, aparencia e as ferramentas de rede/seguranca.
+#
+#  So oferece o que esta instalado: cada item e testado antes de entrar
+#  no menu, entao nunca aparece opcao que abre e falha.
+#
+#  Carregar sem executar, para teste:  CC_LIB=1 source control-center
+# =====================================================================
+set -u
+
+have(){ command -v "$1" >/dev/null 2>&1; }
+term(){ setsid kitty -e "$@" >/dev/null 2>&1 < /dev/null & }
+gui(){  setsid "$@" >/dev/null 2>&1 < /dev/null & }
+
+I_NET=$''; I_WIFI=$''; I_SOM=$''; I_BT=$''
+I_TELA=$''; I_COR=$''; I_SEG=$''; I_SIS=$''
+
+# Cada linha: "icone|rotulo|comando|tipo"   tipo = gui | term
+itens(){
+  # ---- rede ----
+  echo "$I_WIFI|Wi-Fi: conectar, salvar, esquecer|wifi-menu|gui"
+  have nm-connection-editor && \
+    echo "$I_NET|Rede: VPN, 802.1X, IP fixo, rotas|nm-connection-editor|gui"
+  have nmtui && echo "$I_NET|Rede no terminal (nmtui)|nmtui|term"
+  have wavemon && echo "$I_WIFI|Monitor de sinal Wi-Fi (wavemon)|wavemon|term"
+
+  # ---- som ----
+  have pavucontrol && echo "$I_SOM|Som: volume, entradas e saidas|pavucontrol|gui"
+  have wiremix && echo "$I_SOM|Som no terminal (wiremix)|wiremix|term"
+
+  # ---- bluetooth ----
+  have blueman-manager && echo "$I_BT|Bluetooth|blueman-manager|gui"
+  have bluetuith && echo "$I_BT|Bluetooth no terminal|bluetuith|term"
+  { ! have blueman-manager && have bluetoothctl; } && \
+    echo "$I_BT|Bluetooth (bluetoothctl)|bluetoothctl|term"
+
+  # ---- telas ----
+  have nwg-displays && echo "$I_TELA|Telas: posicao e resolucao|nwg-displays|gui"
+  have wdisplays && echo "$I_TELA|Telas (wdisplays)|wdisplays|gui"
+
+  # ---- aparencia ----
+  if have visualconf; then
+    echo "$I_COR|Aparencia completa: Hyprland, Rofi e Kitty|visualconf|term"
+  else
+    have hyprtheme  && echo "$I_COR|Aparencia do Hyprland (hyprtheme)|hyprtheme|term"
+    have rofitheme  && echo "$I_COR|Aparencia do launcher (rofitheme)|rofitheme|term"
+    have kittytheme && echo "$I_COR|Aparencia do terminal (kittytheme)|kittytheme|term"
+  fi
+  have qt6ct      && echo "$I_COR|Tema dos aplicativos Qt (qt6ct)|qt6ct|gui"
+  have nwg-look   && echo "$I_COR|Tema dos aplicativos GTK (nwg-look)|nwg-look|gui"
+
+  # ---- rede e seguranca ----
+  have wireshark  && echo "$I_SEG|Wireshark: captura de pacotes|wireshark|gui"
+  have etherape   && echo "$I_SEG|EtherApe: trafego ao vivo|etherape|gui"
+  have termshark  && echo "$I_SEG|Termshark (wireshark no terminal)|termshark|term"
+  have kismet     && echo "$I_SEG|Kismet: varredura de Wi-Fi|kismet|term"
+  have zaproxy    && echo "$I_SEG|OWASP ZAP: seguranca web|zaproxy|gui"
+  have burpsuite  && echo "$I_SEG|Burp Suite|burpsuite|gui"
+  have bandwhich  && echo "$I_SEG|Banda por processo (bandwhich)|sudo bandwhich|term"
+  have iftop      && echo "$I_SEG|Trafego por conexao (iftop)|sudo iftop|term"
+  have nethogs    && echo "$I_SEG|Trafego por processo (nethogs)|sudo nethogs|term"
+  have gping      && echo "$I_SEG|Ping com grafico (gping)|gping 1.1.1.1|term"
+  have mtr        && echo "$I_SEG|Rota ate um destino (mtr)|mtr 1.1.1.1|term"
+
+  # ---- sistema ----
+  have btop      && echo "$I_SIS|Monitor do sistema (btop)|btop|term"
+  have hyprlock  && echo "$I_SIS|Bloquear a tela|hyprlock|gui"
+}
+
+main(){
+  local -a rot cmd tipo
+  while IFS='|' read -r ic label c t; do
+    [ -z "${label:-}" ] && continue
+    rot+=("$ic  $label")
+    cmd+=("$c")
+    tipo+=("$t")
+  done < <(itens)
+
+  [ "${#rot[@]}" -eq 0 ] && { echo "nada instalado para mostrar"; exit 1; }
+
+  local i
+  i=$(printf '%s\n' "${rot[@]}" | rofi -dmenu -i -no-custom -format i -p "Hyprism")
+  [ -z "${i:-}" ] && exit 0
+
+  # shellcheck disable=SC2086
+  if [ "${tipo[$i]}" = "term" ]; then term ${cmd[$i]}; else gui ${cmd[$i]}; fi
+}
+
+[ -n "${CC_LIB:-}" ] || main "$@"

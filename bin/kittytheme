@@ -1,0 +1,641 @@
+#!/usr/bin/env bash
+# =====================================================================
+#  kittytheme  -  central de personalizacao do kitty + shell
+#  sem argumentos ....... abre o menu
+#  kittytheme <tema> ..... aplica um tema direto
+#  kittytheme perfil ..... perfis prontos (cores + prompt de uma vez)
+#  kittytheme tema | fonte | transparencia | cursor | janela | abas
+#  kittytheme historico | alertas | comportamento | shell | prompt
+#  kittytheme sync ........ segue o tema global ativo do Hyprland
+#  kittytheme -l  lista temas    -r  aleatorio    -h  ajuda
+# =====================================================================
+set -u
+KDIR="$HOME/.config/kitty"
+KCONF="$KDIR/kitty.conf"
+TD="$KDIR/themes"
+PD="$KDIR/prompts"
+CUR="$TD/current.conf"
+STATE="$TD/.active"
+CACHE="$HOME/.cache/kittytheme"
+SELF="$(command -v kittytheme 2>/dev/null || printf '%s' "$0")"
+mkdir -p "$CACHE" "$PD"
+
+# ---------- estilo do seletor (serio, acento vermelho) ----------
+FZF(){ fzf --height=92% --layout=reverse --border=rounded --info=inline-right --ansi --no-separator \
+  --margin=1 --padding=1 --gap=1 --pointer='▸' --marker='✓' --scrollbar='│' \
+  --color='bg:-1,bg+:#1b1111,fg:#b8b8b8,fg+:#ffffff,hl:#ff4a4a,hl+:#ff6a6a:bold,pointer:#ff2b2b,prompt:#ff2b2b:bold,marker:#ff6a6a,info:#666666,header:#888888,border:#5a0000,gutter:-1' \
+  "$@"; }
+
+have(){ command -v "$1" >/dev/null 2>&1; }
+# aplica cores AO VIVO sem recarregar o kitty (assim nao mexe no tamanho da fonte)
+colors_live(){ kitten @ set-colors --all --configured "$CUR" >/dev/null 2>&1; }
+# reload de verdade (so quando muda fonte/blur); mantem o tamanho do config
+reload(){ pkill -USR1 -x kitty >/dev/null 2>&1; }
+kset(){ local k="$1" v="$2"
+  if grep -qE "^${k}([[:space:]]|\$)" "$KCONF" 2>/dev/null; then
+    sed -i -E "s|^${k}[[:space:]].*|${k} $v|" "$KCONF"
+  else printf '%s %s\n' "$k" "$v" >> "$KCONF"; fi
+}
+kget(){ grep -m1 -E "^$1([[:space:]]|$)" "$KCONF" 2>/dev/null | sed -E "s/^$1[[:space:]]+//"; }
+
+# Linhas dos menus de ajuste usam: valor<TAB>nome<TAB>descricao.
+# O valor fica oculto, mas volta intacto para ser gravado no kitty.conf.
+choose_value(){
+  local prompt="$1" current="$2"; shift 2
+  printf '%s\n' "$@" | FZF --delimiter=$'\t' --with-nth=2,3 \
+    --prompt="$prompt > " --header="atual: ${current:--}   ENTER aplica   ESC volta"
+}
+selected_value(){ printf '%s' "$1" | cut -f1; }
+set_and_reload(){
+  local key="$1" value="$2"
+  kset "$key" "$value"
+  reload
+  printf '  %s: %s\n' "$key" "$value"
+}
+pick_setting(){
+  local key="$1" prompt="$2" sel; shift 2
+  sel=$(choose_value "$prompt" "$(kget "$key")" "$@") || return 0
+  [ -n "${sel:-}" ] && set_and_reload "$key" "$(selected_value "$sel")"
+}
+themes(){ find "$TD" -maxdepth 1 -name '*.conf' ! -name 'current.conf' -printf '%f\n' 2>/dev/null | sed 's/\.conf$//' | sort; }
+prompts(){ find "$PD" -maxdepth 1 -name '*.toml' -printf '%f\n' 2>/dev/null | sed 's/\.toml$//' | sort; }
+fontlist(){ { fc-list : family 2>/dev/null | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -iE 'Nerd Font( Mono)?$'; echo "DejaVu Sans Mono"; echo "Adwaita Mono"; } | sort -u; }
+enable_starship_shells(){
+  local fc="$HOME/.config/fish/config.fish"; mkdir -p "$(dirname "$fc")"; touch "$fc"
+  grep -q 'starship init fish' "$fc" 2>/dev/null || printf '\n# prompt\nstarship init fish | source\n' >> "$fc"
+  local bc="$HOME/.bashrc"; touch "$bc"; grep -q 'starship init bash' "$bc" 2>/dev/null || printf '\neval "$(starship init bash)"\n' >> "$bc"
+  local zc="$HOME/.zshrc"; touch "$zc"; grep -q 'starship init zsh' "$zc" 2>/dev/null || printf '\neval "$(starship init zsh)"\n' >> "$zc"
+}
+
+prompt_desc(){ case "$1" in
+  red)     echo "vermelho flat, a identidade do Zero";;
+  box)     echo "duas linhas com moldura vermelha";;
+  bracket) echo "hacker: [user@host] [dir], duas linhas";;
+  dollar)  echo "classico bash: user@host:dir\$";;
+  minimal) echo "uma linha limpa: dir + git + seta";;
+  lean)    echo "ultra minimal, so a setinha verde";;
+  pure)    echo "pastel estilo pure prompt, duas linhas";;
+  nerd)    echo "icones nerd (arch, pasta) flat";;
+  neon)    echo "cyberpunk cyan/magenta flat";;
+  matrix)  echo "verde fosforo, minimal";;
+  soft)    echo "catppuccin pastel, duas linhas";;
+  arrow)   echo "duas linhas com setinhas (tokyo)";;
+  time)    echo "dir + git + hora a direita";;
+  gitrich) echo "git detalhado com contadores";;
+  *)       echo "";;
+esac; }
+
+# ---------- perfis (cores + opacidade + blur + prompt; NAO mexe na fonte) ----------
+# nome -> tema|opacidade|blur|prompt|descricao
+profile_def(){ case "$1" in
+  terminal-red) echo "terminal-red|0.92|32|red|vermelho sobre preto, a identidade do Zero";;
+  blackarch)    echo "blackarch|0.90|24|bracket|preto absoluto, clima pentest";;
+  tokyo-night)  echo "tokyo-night|0.95|28|arrow|azul noturno moderno";;
+  catppuccin)   echo "catppuccin-mocha|0.94|32|soft|pastel escuro, suave";;
+  gruvbox)      echo "gruvbox-dark|1.00|0|dollar|quente retro, opaco";;
+  nord)         echo "nord|0.96|20|minimal|frio e minimal, corporativo";;
+  matrix)       echo "matrix|0.88|16|matrix|verde fosforo sobre preto";;
+  dracula)      echo "dracula|0.93|24|neon|roxo classico, alto contraste";;
+  foco)         echo "one-dark|1.00|0|lean|sobrio e opaco, foco total";;
+esac; }
+PROFILES="terminal-red blackarch tokyo-night catppuccin gruvbox nord matrix dracula foco"
+
+apply_profile(){
+  local d; d=$(profile_def "$1"); [ -z "$d" ] && { echo "perfil '$1' inexistente"; return 1; }
+  local theme op blur prompt desc old_blur
+  IFS='|' read -r theme op blur prompt desc <<<"$d"
+  old_blur=$(grep -m1 '^background_blur' "$KCONF" 2>/dev/null | awk '{print $2}')
+  cp -f "$TD/$theme.conf" "$CUR"; echo "$theme" > "$STATE"
+  kset background_opacity "$op"; kset background_blur "$blur"
+  colors_live
+  kitten @ set-background-opacity --all "$op" >/dev/null 2>&1
+  if [ -n "$prompt" ] && [ -f "$PD/$prompt.toml" ] && have starship; then
+    cp -f "$PD/$prompt.toml" "$HOME/.config/starship.toml"; enable_starship_shells
+  fi
+  [ "$blur" != "$old_blur" ] && reload
+  printf '  perfil aplicado: %s  (tema %s | opacidade %s | blur %s | prompt %s)\n' "$1" "$theme" "$op" "$blur" "$prompt"
+  printf '  reabra a aba/shell para ver o prompt novo\n'
+}
+
+pick_profile(){
+  local prev prev_op; prev=$(cat "$STATE" 2>/dev/null)
+  prev_op=$(grep -m1 '^background_opacity' "$KCONF" 2>/dev/null | awk '{print $2}')
+  local sel; sel=$(for p in $PROFILES; do d=$(profile_def "$p"); printf '%-14s %s\n' "$p" "${d##*|}"; done \
+      | FZF --prompt='perfil > ' --preview "$SELF __pprev {1}" --preview-window='right,56%,border-left' \
+        --header='ENTER aplica cores+prompt   ESC volta')
+  if [ -n "${sel:-}" ]; then apply_profile "$(echo "$sel" | awk '{print $1}')"
+  else
+    [ -n "$prev" ] && kitten @ set-colors --all "$TD/$prev.conf" >/dev/null 2>&1
+    [ -n "$prev_op" ] && kitten @ set-background-opacity --all "$prev_op" >/dev/null 2>&1
+  fi
+}
+
+# ---------- tema (so cores, ao vivo, SEM reload) ----------
+pick_theme(){
+  local prev; prev=$(cat "$STATE" 2>/dev/null)
+  local pc='kitten @ set-colors -a '"$TD"'/{}.conf >/dev/null 2>&1; sed -n "1,22p" '"$TD"'/{}.conf'
+  local t; t=$(themes | FZF --prompt='tema > ' --preview "$pc" --preview-window='right,50%,border-left' \
+      --header='a cor muda no terminal ao vivo   ENTER aplica   ESC volta')
+  if [ -n "${t:-}" ]; then cp -f "$TD/$t.conf" "$CUR"; echo "$t" > "$STATE"; colors_live; printf '  tema: %s\n' "$t"
+  else [ -n "$prev" ] && kitten @ set-colors --all "$TD/$prev.conf" >/dev/null 2>&1; fi
+}
+
+sync_hypr(){
+  local h
+  h=$(cat "$HOME/.config/hypr/themes/.active" 2>/dev/null)
+  [ -n "$h" ] || { echo '  o Hyprland nao tem tema global ativo'; return 1; }
+  [ "$h" = sddm-terminal-red ] && h=terminal-red
+  [ -f "$TD/$h.conf" ] || { printf '  o tema global "%s" nao possui versao Kitty\n' "$h"; return 1; }
+  cp -f "$TD/$h.conf" "$CUR"
+  printf '%s\n' "$h" > "$STATE"
+  colors_live
+  printf '  sincronizado com o tema global do Hyprland (%s)\n' "$h"
+}
+
+# ---------- transparencia + blur ----------
+pick_transparency(){
+  local old o; old=$(grep -m1 '^background_opacity' "$KCONF" 2>/dev/null | awk '{print $2}')
+  o=$(printf '1.00  opaco\n0.95\n0.92  recomendado\n0.88\n0.82\n0.75\n0.65' \
+      | FZF --prompt='opacidade > ' --preview 'v=$(echo {} | awk "{print \$1}"); kitten @ set-background-opacity --all "$v" >/dev/null 2>&1; printf "opacidade ao vivo: %s\n" {}' \
+      --preview-window='right,40%,border-left' --header='muda ao vivo   ENTER aplica')
+  if [ -z "${o:-}" ]; then
+    [ -n "$old" ] && kitten @ set-background-opacity --all "$old" >/dev/null 2>&1
+    return
+  fi
+  local val; val=$(echo "$o" | awk '{print $1}')
+  kset background_opacity "$val"; kitten @ set-background-opacity --all "$val" >/dev/null 2>&1
+  local b; b=$(printf 'forte  48\nmedio  24\nleve   8\nnenhum 0' | FZF --prompt='blur > ' --header='desfoque atras da janela (aplica no reload)')
+  case "${b:-}" in *48*) kset background_blur 48; reload;; *24*) kset background_blur 24; reload;; *8*) kset background_blur 8; reload;; *nenhum*|*' 0'*) kset background_blur 0; reload;; esac
+  printf '  opacidade %s | blur %s\n' "$val" "${b:-inalterado}"
+}
+
+# ---------- fonte: amostra REAL por imagem (nao mexe no terminal ate o ENTER) ----------
+font_sheet(){
+  local out="$CACHE/fonts.png"; local tmpd; tmpd=$(mktemp -d); local i=0 f
+  while read -r fam; do
+    [ -z "$fam" ] && continue
+    f=$(fc-match -f '%{file}' "$fam" 2>/dev/null)
+    magick -size 940x50 xc:'#0d0d0d' -fill '#e0e0e0' -font "$f" -pointsize 20 \
+      -gravity West -annotate +14+0 "${fam}      ->  () => != == >=   { abc 123 }   git  ❯" \
+      "$tmpd/$(printf '%02d' $i).png" 2>/dev/null
+    i=$((i+1))
+  done < <(fontlist)
+  magick "$tmpd"/*.png -append "$out" 2>/dev/null
+  rm -rf "$tmpd"; printf '%s' "$out"
+}
+pick_font(){
+  if have magick && have kitten; then
+    local sheet; sheet=$(font_sheet)
+    clear; [ -f "$sheet" ] && kitten icat --align left "$sheet" 2>/dev/null; echo
+  fi
+  local fam; fam=$(fontlist | fzf --height=42% --layout=reverse --border=top --info=inline \
+      --pointer='>' --color='pointer:red,prompt:red,hl:red,hl+:red' \
+      --prompt='fonte > ' --header='veja a amostra acima   ENTER aplica   ESC cancela')
+  [ -z "${fam:-}" ] && return
+  kset font_family "$fam"
+  local size; size=$(printf '9\n10\n11\n12\n13\n14\n15\n16' | fzf --height=30% --layout=reverse --border=top \
+      --pointer='>' --color='pointer:red,prompt:red,hl:red,hl+:red' \
+      --prompt='tamanho > ' --header='tamanho da fonte (menor = 9)')
+  [ -n "${size:-}" ] && kset font_size "$size"
+  # aplica: reload le a fonte nova; reforca o tamanho pra nunca ficar grande
+  reload
+  local sz; sz=$(grep -m1 '^font_size' "$KCONF" | awk '{print $2}')
+  [ -n "$sz" ] && kitten @ set-font-size "$sz" >/dev/null 2>&1
+  printf '  fonte: %s | tamanho %s\n' "$fam" "$sz"
+}
+
+# ---------- cursor ----------
+pick_cursor(){
+  while true; do
+    local c key
+    c=$(choose_value 'cursor' "$(kget cursor_shape) · pisca $(kget cursor_blink_interval)s" \
+      $'forma\tForma do cursor\tBloco, barra vertical ou sublinhado' \
+      $'desfocado\tCursor sem foco\tAparencia quando a janela nao esta ativa' \
+      $'piscar\tVelocidade do piscar\tDesligado, suave, rapido ou do sistema' \
+      $'parar\tParar de piscar\tTempo de inatividade antes de ficar fixo' \
+      $'espessura\tEspessura\tAjusta barra vertical e sublinhado' \
+      $'voltar\t← Voltar\tRetornar ao menu do Kitty') || return 0
+    key=$(selected_value "$c")
+    case "$key" in
+      forma) pick_setting cursor_shape 'forma' \
+        $'block\tBloco\tCursor cheio e facil de localizar' \
+        $'beam\tBarra vertical\tVisual leve, estilo editor' \
+        $'underline\tSublinhado\tLinha abaixo do caractere' ;;
+      desfocado) pick_setting cursor_shape_unfocused 'sem foco' \
+        $'hollow\tContorno\tMostra claramente que a janela perdeu foco' \
+        $'unchanged\tSem mudanca\tMantem a mesma forma' \
+        $'block\tBloco\tBloco cheio mesmo sem foco' \
+        $'beam\tBarra vertical\tBarra fina mesmo sem foco' \
+        $'underline\tSublinhado\tLinha abaixo do caractere' ;;
+      piscar) pick_setting cursor_blink_interval 'piscar' \
+        $'0\tDesligado\tCursor sempre visivel' \
+        $'0.7\tSuave\tPisca devagar' \
+        $'0.5\tNormal\tEquilibrado' \
+        $'0.3\tRapido\tPisca com mais frequencia' \
+        $'-1\tDo sistema\tSegue o intervalo padrao do desktop' ;;
+      parar) pick_setting cursor_stop_blinking_after 'parar apos' \
+        $'0\tNunca\tContinua piscando sem limite' \
+        $'5\t5 segundos\tFica fixo rapidamente' \
+        $'15\t15 segundos\tPadrao confortavel' \
+        $'30\t30 segundos\tDemora mais para ficar fixo' ;;
+      espessura)
+        local thick
+        thick=$(choose_value 'espessura' "barra $(kget cursor_beam_thickness) · linha $(kget cursor_underline_thickness)" \
+          $'1.0\tFina\tVisual delicado' $'1.5\tNormal\tBoa leitura' \
+          $'2.0\tMedia\tMais evidente' $'2.5\tGrossa\tMaxima visibilidade') || continue
+        [ -z "${thick:-}" ] && continue
+        thick=$(selected_value "$thick")
+        kset cursor_beam_thickness "$thick"; kset cursor_underline_thickness "$thick"; reload
+        ;;
+      voltar|"") return 0 ;;
+    esac
+  done
+}
+
+# ---------- janela, tamanho e espacamento ----------
+apply_window_preset(){
+  local width height
+  case "$1" in
+    compacta|compact) width=90c;  height=26c ;;
+    equilibrada|balanced) width=110c; height=30c ;;
+    ampla|large) width=130c; height=36c ;;
+    gigante|xlarge) width=150c; height=42c ;;
+    *) printf 'tamanho de janela invalido: %s\n' "$1" >&2; return 1 ;;
+  esac
+  kset remember_window_size no
+  kset initial_window_width "$width"
+  kset initial_window_height "$height"
+  reload
+  printf '  janela inicial: %s × %s\n' "$width" "$height"
+}
+
+pick_window(){
+  while true; do
+    local c key
+    c=$(choose_value 'janela' "padding $(kget window_padding_width) · $(kget initial_window_width) × $(kget initial_window_height)" \
+      $'padding\tEspaco interno\tDistancia entre texto e bordas' \
+      $'tamanho\tTamanho ao abrir\tPerfis em colunas e linhas' \
+      $'lembrar\tLembrar ultimo tamanho\tIgnora o tamanho inicial quando ativo' \
+      $'distribuicao\tDistribuicao do espaco\tCentralizado ou preso no canto' \
+      $'decoracao\tDecoracao nativa\tTitulo e sombra da janela no Wayland' \
+      $'voltar\t← Voltar\tRetornar ao menu do Kitty') || return 0
+    key=$(selected_value "$c")
+    case "$key" in
+      padding) pick_setting window_padding_width 'padding' \
+        $'0\tSem espaco\tTexto encostado nas bordas' $'4\tCompacto\tPouco espaco' \
+        $'8\tConfortavel\tEquilibrado' $'12\tAmplo\tVisual arejado atual' \
+        $'16\tMuito amplo\tMais respiro ao redor do texto' $'20\tMaximo\tEstilo painel' ;;
+      tamanho)
+        local size
+        size=$(choose_value 'tamanho inicial' "$(kget initial_window_width) × $(kget initial_window_height)" \
+          $'compacta\tCompacta\t90 colunas × 26 linhas' \
+          $'equilibrada\tEquilibrada\t110 colunas × 30 linhas' \
+          $'ampla\tAmpla\t130 colunas × 36 linhas' \
+          $'gigante\tGigante\t150 colunas × 42 linhas') || continue
+        [ -n "${size:-}" ] && apply_window_preset "$(selected_value "$size")"
+        ;;
+      lembrar) pick_setting remember_window_size 'lembrar tamanho' \
+        $'yes\tAtivado\tNovas janelas repetem o ultimo tamanho usado' \
+        $'no\tDesativado\tUsa sempre o perfil de tamanho inicial' ;;
+      distribuicao) pick_setting placement_strategy 'distribuicao' \
+        $'center\tCentralizada\tEspaco extra dividido em todos os lados' \
+        $'top-left\tCanto superior esquerdo\tEspaco extra fica embaixo e a direita' ;;
+      decoracao) pick_setting hide_window_decorations 'decoracao' \
+        $'no\tCompleta\tMantem titulo, bordas e sombra disponiveis' \
+        $'titlebar-only\tSem titulo\tMantem sombra para redimensionar no Wayland' \
+        $'yes\tOculta\tRemove toda decoracao desenhada pelo Kitty' ;;
+      voltar|"") return 0 ;;
+    esac
+  done
+}
+
+# ---------- abas ----------
+pick_tabs(){
+  while true; do
+    local c key
+    c=$(choose_value 'abas' "$(kget tab_bar_style) · $(kget tab_bar_edge) · minimo $(kget tab_bar_min_tabs)" \
+      $'estilo\tEstilo visual\tPowerline, inclinado, fade, separador ou oculto' \
+      $'posicao\tPosicao da barra\tTopo, base ou laterais' \
+      $'alinhamento\tAlinhamento\tInicio, centro ou fim da barra' \
+      $'minimo\tQuando mostrar\tQuantidade minima de abas abertas' \
+      $'botao\tBotao de nova aba\tExibe um + clicavel' \
+      $'titulo\tFormato do titulo\tIndice, titulo e simbolos de atividade' \
+      $'powerline\tSeparador Powerline\tInclinado, angulado ou redondo' \
+      $'voltar\t← Voltar\tRetornar ao menu do Kitty') || return 0
+    key=$(selected_value "$c")
+    case "$key" in
+      estilo) pick_setting tab_bar_style 'estilo' \
+        $'powerline\tPowerline\tFaixa continua com separadores' \
+        $'slant\tInclinado\tAbas lembram fichas fisicas' \
+        $'fade\tFade\tBordas suaves em degradê' \
+        $'separator\tSeparador\tAbas simples divididas por um simbolo' \
+        $'hidden\tOculta\tNao mostra a barra de abas' ;;
+      posicao) pick_setting tab_bar_edge 'posicao' \
+        $'top\tTopo\tBarra acima do terminal' $'bottom\tBase\tBarra abaixo do terminal' \
+        $'left\tEsquerda\tLista vertical a esquerda' $'right\tDireita\tLista vertical a direita' ;;
+      alinhamento) pick_setting tab_bar_align 'alinhamento' \
+        $'start\tInicio\tAlinha no inicio da barra' $'center\tCentro\tCentraliza as abas' \
+        $'end\tFim\tAlinha no final da barra' ;;
+      minimo) pick_setting tab_bar_min_tabs 'minimo de abas' \
+        $'1\tSempre\tMostra inclusive com uma aba' $'2\tDuas abas\tOculta quando ha somente uma' \
+        $'3\tTres abas\tMostra apenas a partir da terceira' ;;
+      botao) pick_setting tab_bar_show_new_tab_button 'botao +' \
+        $'yes\tMostrar\tExibe um botao clicavel para nova aba' \
+        $'no\tOcultar\tVisual mais limpo' ;;
+      titulo) pick_setting tab_title_template 'titulo' \
+        $'"{index}: {title}"\tIndice + titulo\tExemplo: 2: editor' \
+        $'"{sup.index} {title}"\tIndice elevado\tIndice discreto antes do titulo' \
+        $'"{title}"\tSomente titulo\tSem numero da aba' \
+        $'"{index}: {bell_symbol}{activity_symbol}{title}"\tTitulo + alertas\tInclui atividade e sino' ;;
+      powerline) pick_setting tab_powerline_style 'powerline' \
+        $'slanted\tInclinado\tSeparador diagonal suave' \
+        $'angled\tAngulado\tSetas mais marcadas' \
+        $'round\tRedondo\tSeparadores arredondados' ;;
+      voltar|"") return 0 ;;
+    esac
+  done
+}
+
+# ---------- historico, rolagem e mouse ----------
+pick_history(){
+  while true; do
+    local c key
+    c=$(choose_value 'historico e mouse' "$(kget scrollback_lines) linhas · roda $(kget wheel_scroll_multiplier)x" \
+      $'linhas\tHistorico de rolagem\tEquilibrio entre memoria e alcance' \
+      $'velocidade\tVelocidade da roda\tQuantidade rolada por passo do mouse' \
+      $'copiar\tCopiar ao selecionar\tArea primaria, clipboard ou manual' \
+      $'espacos\tEspacos ao copiar\tRemove espacos no final das linhas' \
+      $'mouse\tOcultar ponteiro\tTempo sem uso antes de esconder' \
+      $'voltar\t← Voltar\tRetornar ao menu do Kitty') || return 0
+    key=$(selected_value "$c")
+    case "$key" in
+      linhas) pick_setting scrollback_lines 'historico' \
+        $'2000\tLeve\tPouca memoria, historico curto' $'10000\tNormal\tBom para uso diario' \
+        $'20000\tAmplo\tConfiguracao atual' $'50000\tMuito amplo\tBom para logs longos' \
+        $'-1\tInfinito\tPode consumir bastante memoria' ;;
+      velocidade) pick_setting wheel_scroll_multiplier 'velocidade' \
+        $'1.0\tPrecisa\tUma linha por passo' $'3.0\tSuave\tRolagem controlada' \
+        $'5.0\tNormal\tPadrao do Kitty' $'8.0\tRapida\tPercorre textos longos' ;;
+      copiar) pick_setting copy_on_select 'copiar ao selecionar' \
+        $'yes\tSelecao primaria\tCole com o botao do meio no Linux' \
+        $'clipboard\tClipboard\tCole normalmente com Ctrl+Shift+V' \
+        $'no\tManual\tSo copia usando um atalho' ;;
+      espacos) pick_setting strip_trailing_spaces 'espacos finais' \
+        $'never\tNunca remover\tCopia o texto exatamente' \
+        $'smart\tInteligente\tRemove em selecao normal, preserva retangular' \
+        $'always\tSempre remover\tLimpa todas as linhas copiadas' ;;
+      mouse) pick_setting mouse_hide_wait 'ocultar mouse' \
+        $'0\tNunca\tPonteiro sempre visivel' $'1\t1 segundo\tEsconde rapidamente' \
+        $'2\t2 segundos\tEquilibrado' $'5\t5 segundos\tEspera mais tempo' \
+        $'-1\tAo digitar\tSome imediatamente quando voce escreve' ;;
+      voltar|"") return 0 ;;
+    esac
+  done
+}
+
+# ---------- sino e alertas ----------
+apply_alert_preset(){
+  case "$1" in
+    silencioso|silent)
+      kset enable_audio_bell no; kset visual_bell_duration 0.0; kset window_alert_on_bell no ;;
+    visual)
+      kset enable_audio_bell no; kset visual_bell_duration 0.15; kset window_alert_on_bell yes ;;
+    audio)
+      kset enable_audio_bell yes; kset visual_bell_duration 0.0; kset window_alert_on_bell yes ;;
+    completo|both)
+      kset enable_audio_bell yes; kset visual_bell_duration 0.15; kset window_alert_on_bell yes ;;
+    *) printf 'perfil de alerta invalido: %s\n' "$1" >&2; return 1 ;;
+  esac
+  reload
+  printf '  alertas: %s\n' "$1"
+}
+
+pick_alerts(){
+  local sel
+  sel=$(choose_value 'alertas' "audio $(kget enable_audio_bell) · visual $(kget visual_bell_duration)s" \
+    $'silencioso\tSilencioso\tSem som, flash ou pedido de atencao' \
+    $'visual\tSomente visual\tFlash curto e aviso da janela' \
+    $'audio\tSomente audio\tSom e aviso da janela, sem flash' \
+    $'completo\tAudio + visual\tTodos os avisos habilitados') || return 0
+  [ -n "${sel:-}" ] && apply_alert_preset "$(selected_value "$sel")"
+}
+
+# ---------- comportamento do terminal e shell ----------
+pick_behavior(){
+  while true; do
+    local c key
+    c=$(choose_value 'comportamento' "integracao $(kget shell_integration) · confirmar $(kget confirm_os_window_close)" \
+      $'integracao\tIntegracao com o shell\tPrompt, diretorio e navegacao de comandos' \
+      $'confirmar\tConfirmar ao fechar\tProtege comandos ou varias abas abertas' \
+      $'saida\tFechar ao sair do shell\tControla processos em segundo plano' \
+      $'links\tDetectar links\tReconhece URLs sob o mouse' \
+      $'foco\tFoco segue o mouse\tTroca o painel ativo ao mover o ponteiro' \
+      $'voltar\t← Voltar\tRetornar ao menu do Kitty') || return 0
+    key=$(selected_value "$c")
+    case "$key" in
+      integracao) pick_setting shell_integration 'integracao do shell' \
+        $'enabled\tCompleta\tPrompt, titulo, diretorio e navegacao integrados' \
+        $'no-cursor\tSem alterar cursor\tMantem recursos, respeita a forma escolhida aqui' \
+        $'no-title\tSem alterar titulo\tMantem o titulo definido pelos programas' \
+        $'no-cursor no-title\tCursor e titulo livres\tDesliga somente essas duas interferencias' \
+        $'disabled\tDesativada\tShell funciona sem recursos extras do Kitty' ;;
+      confirmar) pick_setting confirm_os_window_close 'confirmar fechamento' \
+        $'0\tNunca\tFecha sem perguntar' \
+        $'-1\tDurante comandos\tPergunta se houver um comando em execucao' \
+        $'1\tSempre\tPergunta mesmo no prompt vazio' \
+        $'2\tVarias janelas\tPergunta quando a aba tiver duas ou mais janelas' ;;
+      saida) pick_setting close_on_child_death 'ao sair do shell' \
+        $'no\tAguardar processos\tMantem a janela se algo ainda estiver escrevendo' \
+        $'yes\tFechar imediatamente\tFecha assim que o shell terminar' ;;
+      links) pick_setting detect_urls 'detectar links' \
+        $'yes\tAtivado\tURLs ficam clicaveis e podem ser abertas' \
+        $'no\tDesativado\tTrata URLs como texto comum' ;;
+      foco) pick_setting focus_follows_mouse 'foco pelo mouse' \
+        $'yes\tAtivado\tPainel sob o ponteiro recebe foco' \
+        $'no\tDesativado\tFoco muda apenas por clique ou teclado' ;;
+      voltar|"") return 0 ;;
+    esac
+  done
+}
+
+# ---------- shell ----------
+pick_shell(){
+  local sel; sel=$(for s in fish bash zsh nu elvish xonsh; do p=$(command -v "$s" 2>/dev/null); [ -n "$p" ] && printf '%-8s %s\n' "$s" "$p"; done \
+      | FZF --prompt='shell > ' --preview 'sh=$(echo {} | awk "{print \$1}"); $sh --version 2>/dev/null | head -1; echo; echo "vale nas abas e janelas NOVAS do kitty"' \
+      --preview-window='right,45%,border-left' --header='shell padrao do kitty')
+  [ -z "${sel:-}" ] && return
+  local name; name=$(echo "$sel" | awk '{print $1}')
+  kset shell "$(command -v "$name")"; printf '  shell: %s  (abra uma aba nova para usar)\n' "$name"
+}
+
+# ---------- prompt: 14 configs proprias, previa REAL renderizada ----------
+pick_prompt(){
+  if ! have starship; then echo "  starship nao instalado:  sudo pacman -S starship"; return; fi
+  local rows sel
+  rows=$( { printf 'padrao         voltar ao prompt padrao do starship\n'
+            printf 'desligar       prompt simples do shell (sem starship)\n'
+            prompts | while read -r p; do printf '%-14s %s\n' "$p" "$(prompt_desc "$p")"; done; } )
+  sel=$(echo "$rows" | FZF --prompt='prompt > ' --preview "$SELF __sprev {1}" \
+        --preview-window='right,58%,border-left' --header='previa REAL do prompt ao lado   ENTER aplica')
+  [ -z "${sel:-}" ] && return
+  local name; name=$(echo "$sel" | awk '{print $1}')
+  case "$name" in
+    padrao)   rm -f "$HOME/.config/starship.toml"; enable_starship_shells; echo "  starship padrao (reabra o shell)";;
+    desligar) sed -i '/starship init fish/d' "$HOME/.config/fish/config.fish" 2>/dev/null
+              sed -i '/starship init bash/d' "$HOME/.bashrc" 2>/dev/null
+              sed -i '/starship init zsh/d'  "$HOME/.zshrc" 2>/dev/null
+              echo "  starship desligado (reabra o shell)";;
+    *)        cp -f "$PD/$name.toml" "$HOME/.config/starship.toml"; enable_starship_shells
+              printf '  prompt aplicado: %s  (reabra o shell ou a aba para ver)\n' "$name";;
+  esac
+}
+
+show_help(){
+  printf '%s\n' \
+    'kittytheme — personalizacao do Kitty + shell' \
+    '' \
+    '  kittytheme                      abre a central visual' \
+    '  kittytheme <tema>               aplica um tema direto' \
+    '  kittytheme perfil [nome]        perfis de cores + prompt' \
+    '  kittytheme tema                 temas de cores' \
+    '  kittytheme transparencia        opacidade e blur' \
+    '  kittytheme fonte                familia e tamanho' \
+    '  kittytheme cursor [forma]       forma, piscar e espessura' \
+    '  kittytheme janela [perfil]      tamanho, padding e decoracao' \
+    '  kittytheme padding [0-100]      espaco interno' \
+    '  kittytheme abas [estilo]        barra e titulos das abas' \
+    '  kittytheme historico [linhas]   rolagem, mouse e copia' \
+    '  kittytheme alertas [perfil]     audio, flash e atencao' \
+    '  kittytheme comportamento       shell, fechamento e links' \
+    '  kittytheme shell | prompt       shell e Starship' \
+    '  kittytheme -l | -r              listar ou tema aleatorio'
+}
+
+show_config(){
+  printf '\n\033[1;31mKITTY + SHELL\033[0m\n\n'
+  printf '  tema          %s\n' "$(cat "$STATE" 2>/dev/null)"
+  printf '  fonte         %s · %spt\n' "$(kget font_family)" "$(kget font_size)"
+  printf '  fundo         opacidade %s · blur %s\n' "$(kget background_opacity)" "$(kget background_blur)"
+  printf '  cursor        %s · pisca %ss\n' "$(kget cursor_shape)" "$(kget cursor_blink_interval)"
+  printf '  janela        %s × %s · padding %s\n' "$(kget initial_window_width)" "$(kget initial_window_height)" "$(kget window_padding_width)"
+  printf '  abas          %s · %s · minimo %s\n' "$(kget tab_bar_style)" "$(kget tab_bar_edge)" "$(kget tab_bar_min_tabs)"
+  printf '  historico     %s linhas · roda %sx\n' "$(kget scrollback_lines)" "$(kget wheel_scroll_multiplier)"
+  printf '  alertas       audio %s · visual %ss\n' "$(kget enable_audio_bell)" "$(kget visual_bell_duration)"
+  printf '  shell         %s · integracao %s\n' "$(kget shell)" "$(kget shell_integration)"
+  if [ -f "$HOME/.config/starship.toml" ]; then printf 'prompt: %s\n' "$(grep -m1 -oE '# .*' "$HOME/.config/starship.toml" 2>/dev/null || echo personalizado)"; else echo "prompt: padrao/desligado"; fi
+  echo; read -rp "  [enter] " _
+}
+
+# ---------- menu principal ----------
+main_menu(){
+  if ! have fzf; then echo "instale o fzf para o menu, ou use: kittytheme <tema>"; themes; return; fi
+  while true; do
+    local c; c=$(printf '%s\n' \
+      "perfis         visual completo pronto (cores + prompt)" \
+      "tema           somente as cores (13 temas)" \
+      "transparencia  opacidade e desfoque da janela" \
+      "fonte          familia e tamanho, com amostra visual" \
+      "cursor         forma, piscar e espessura" \
+      "janela         padding, tamanho inicial e decoracao" \
+      "abas           estilo, posicao, titulo e botao +" \
+      "historico      rolagem, mouse e copia ao selecionar" \
+      "alertas        sino sonoro, flash e aviso da janela" \
+      "comportamento  integracao, fechamento, links e foco" \
+      "shell          fish, bash ou zsh" \
+      "prompt         14 prompts proprios (previa real)" \
+      "sync           seguir o tema global do Hyprland" \
+      "config         ver a configuracao atual" \
+      "sair" \
+      | FZF --prompt='kitty > ' --height=88% --header='central de personalizacao do terminal')
+    case "${c%% *}" in
+      perfis) pick_profile ;;
+      tema) pick_theme ;;
+      transparencia) pick_transparency ;;
+      fonte) pick_font ;;
+      cursor) pick_cursor ;;
+      janela) pick_window ;;
+      abas) pick_tabs ;;
+      historico) pick_history ;;
+      alertas) pick_alerts ;;
+      comportamento) pick_behavior ;;
+      shell) pick_shell ;;
+      prompt) pick_prompt ;;
+      sync) sync_hypr ;;
+      config) show_config ;;
+      sair|"") break ;;
+    esac
+  done
+}
+
+# ---------- CLI + subcomandos de previa (uso interno do fzf) ----------
+case "${1:-}" in
+  __pprev)  # previa de perfil: cores/opacidade ao vivo + detalhes
+    d=$(profile_def "$2"); IFS='|' read -r theme op blur prompt desc <<<"$d"
+    kitten @ set-colors -a "$TD/$theme.conf"    >/dev/null 2>&1
+    kitten @ set-background-opacity --all "$op"  >/dev/null 2>&1
+    printf 'perfil     %s\n%s\n\ntema       %s\nopacidade  %s\nblur       %s\nprompt     %s\n\n' \
+           "$2" "$desc" "$theme" "$op" "$blur" "$prompt"
+    sed -n '2,12p' "$TD/$theme.conf"
+    ;;
+  __sprev)  # previa de prompt: renderiza o prompt DE VERDADE (isolado)
+    f="$PD/$2.toml"
+    printf 'prompt:  %s\n%s\n\nassim vai ficar:\n\n' "$2" "$(prompt_desc "$2")"
+    if [ -f "$f" ]; then env -i HOME="$HOME" PATH="$PATH" TERM=xterm-kitty STARSHIP_CONFIG="$f" starship prompt 2>/dev/null
+    else printf '(padrao do starship / desligar)\n'; fi
+    printf '\n\n--- %s.toml ---\n' "$2"
+    [ -f "$f" ] && grep -vE '^\s*("\$schema"|command_timeout|add_newline)' "$f" | sed -n '1,22p'
+    ;;
+  -l|--list) themes ;;
+  -r|--random) t=$(themes | shuf -n1); cp -f "$TD/$t.conf" "$CUR"; echo "$t">"$STATE"; colors_live; printf 'tema: %s\n' "$t" ;;
+  -h|--help) show_help ;;
+  perfil|perfis|profile) [ -n "${2:-}" ] && apply_profile "$2" || pick_profile ;;
+  tema|theme|cores) pick_theme ;;
+  transp*|blur) pick_transparency ;;
+  fonte|font) pick_font ;;
+  cursor)
+    case "${2:-}" in
+      "") pick_cursor ;;
+      block|beam|underline) set_and_reload cursor_shape "$2" ;;
+      *) printf 'forma de cursor invalida: %s (use block, beam ou underline)\n' "$2" >&2; exit 2 ;;
+    esac
+    ;;
+  janela|window)
+    case "${2:-}" in
+      "") pick_window ;;
+      compacta|compact|equilibrada|balanced|ampla|large|gigante|xlarge) apply_window_preset "$2" ;;
+      *) printf 'perfil de janela invalido: %s\n' "$2" >&2; exit 2 ;;
+    esac
+    ;;
+  padding)
+    if [ -z "${2:-}" ]; then pick_window
+    elif [[ "$2" =~ ^[0-9]+$ ]] && [ "$2" -le 100 ]; then set_and_reload window_padding_width "$2"
+    else printf 'padding invalido: use um numero entre 0 e 100\n' >&2; exit 2; fi
+    ;;
+  abas|tabs)
+    case "${2:-}" in
+      "") pick_tabs ;;
+      fade|slant|separator|powerline|hidden) set_and_reload tab_bar_style "$2" ;;
+      *) printf 'estilo de abas invalido: %s\n' "$2" >&2; exit 2 ;;
+    esac
+    ;;
+  historico|history|scroll)
+    if [ -z "${2:-}" ]; then pick_history
+    elif [[ "$2" =~ ^(-1|[0-9]+)$ ]]; then set_and_reload scrollback_lines "$2"
+    else printf 'historico invalido: use uma quantidade de linhas ou -1\n' >&2; exit 2; fi
+    ;;
+  alertas|alerta|bell)
+    case "${2:-}" in
+      "") pick_alerts ;;
+      silencioso|silent|visual|audio|completo|both) apply_alert_preset "$2" ;;
+      *) printf 'alerta invalido: use silencioso, visual, audio ou completo\n' >&2; exit 2 ;;
+    esac
+    ;;
+  comportamento|behavior) pick_behavior ;;
+  shell) pick_shell ;;
+  prompt) pick_prompt ;;
+  sync) sync_hypr ;;
+  config) show_config ;;
+  "" ) if have visualconf; then exec visualconf kitty; else main_menu; fi ;;
+  * ) if [ -f "$TD/$1.conf" ]; then cp -f "$TD/$1.conf" "$CUR"; echo "$1">"$STATE"; colors_live; printf 'tema: %s\n' "$1"
+      else echo "opcao ou tema '$1' invalido"; main_menu; fi ;;
+esac

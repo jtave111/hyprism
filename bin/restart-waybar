@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+
+pkill waybar 2>/dev/null
+sleep 0.3
+waybar \
+    --config "$HOME/.config/waybar/config.jsonc" \
+    --style "$HOME/.config/waybar/style.css" \
+    >"$XDG_RUNTIME_DIR/waybar.log" 2>&1 &

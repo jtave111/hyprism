@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# =====================================================================
+#  wifi-menu — gerenciador de Wi-Fi no rofi, usando nmcli.
+#
+#  Mostra numa lista so: qual esta conectada, quais ja estao salvas,
+#  a intensidade do sinal e se e protegida. Substitui o
+#  nm-connection-editor, que nao deixa nada disso obvio.
+#
+#  Duas decisoes que evitam bug:
+#   - icones por escape \uXXXX, nao colados como caractere literal
+#     (literal se perde em algumas gravacoes de arquivo);
+#   - a escolha volta do rofi como INDICE (-format i), nao como texto.
+#     Assim o SSID nunca precisa ser extraido de volta da linha exibida,
+#     o que quebraria com nome contendo %, espaco duplo ou simbolo.
+#
+#  Carregar sem executar, para teste:  WIFI_MENU_LIB=1 source wifi-menu
+# =====================================================================
+# Tema proprio: janela mais larga (SSID + sinal + cadeado) e campo de senha
+# estilizado. Ele herda a paleta ATIVA do launcher, entao seguir o tema do
+# sistema e automatico.
+ROFI_TEMA="$HOME/.config/rofi/wifi.rasi"
+ROFI(){ rofi -theme "$ROFI_TEMA" "$@"; }
+
+set -u
+
+ICON_OK=$''     # conectada
+ICON_SAVE=$''   # salva
+ICON_LOCK=$''   # protegida
+ICON_OPEN=$''   # aberta
+ICON_SCAN=$''   # procurar
+ICON_CFG=$''    # avancado
+ICON_OFF=$''    # desconectar / esquecer
+
+notify(){ command -v notify-send >/dev/null && notify-send -a "Wi-Fi" "$1" "${2:-}"; }
+
+bars(){
+  local s="${1:-0}"
+  if   [ "$s" -ge 75 ] 2>/dev/null; then printf '▂▄▆█'
+  elif [ "$s" -ge 50 ] 2>/dev/null; then printf '▂▄▆░'
+  elif [ "$s" -ge 25 ] 2>/dev/null; then printf '▂▄░░'
+  else                                    printf '▂░░░'; fi
+}
+
+# Preenche dois arrays paralelos: SSIDS[] e LINHAS[] (o que aparece no menu).
+SSIDS=(); LINHAS=(); ATIVAS=()
+
+carregar(){
+  SSIDS=(); LINHAS=(); ATIVAS=()
+  local salvas; salvas=$(nmcli -t -f NAME connection show 2>/dev/null)
+
+  # Dedup por SSID mantendo o sinal mais forte: a mesma rede aparece
+  # varias vezes (2.4GHz, 5GHz, repetidor).
+  while IFS=$'\t' read -r act ssid sig sec; do
+    [ -z "$ssid" ] && continue
+    local mark icon
+    if   [ "$act" = "yes" ]; then mark="$ICON_OK  "
+    elif printf '%s\n' "$salvas" | grep -qxF "$ssid"; then mark="$ICON_SAVE  "
+    else mark="   "; fi
+    if [ -z "$sec" ] || [ "$sec" = "--" ]; then icon="$ICON_OPEN"; else icon="$ICON_LOCK"; fi
+
+    SSIDS+=("$ssid")
+    ATIVAS+=("$act")
+    LINHAS+=("$(printf '%s%s  %s  %s  %s%%' "$mark" "$(bars "$sig")" "$icon" "$ssid" "$sig")")
+  done < <(
+    nmcli -t -f ACTIVE,SSID,SIGNAL,SECURITY device wifi list --rescan no 2>/dev/null \
+    | awk -F: 'NF>=4 && $2 != "" {
+          ssid=$2; sig=$3+0
+          if (!(ssid in best) || sig > best[ssid]) {
+              best[ssid]=sig; act[ssid]=$1; sec[ssid]=$4
+          }
+          if ($1 == "yes") act[ssid]="yes"
+        }
+        END { for (s in best) printf "%s\t%s\t%s\t%s\n", act[s], s, best[s], sec[s] }' \
+    | sort -t$'\t' -k3 -rn
+  )
+}
+
+conectar(){
+  local ssid="$1" salvas senha
+  salvas=$(nmcli -t -f NAME connection show 2>/dev/null)
+
+  if printf '%s\n' "$salvas" | grep -qxF "$ssid"; then
+    if nmcli connection up id "$ssid" >/dev/null 2>&1; then
+      notify "Conectado" "$ssid"
+    else
+      notify "Nao conectou" "$ssid esta salva, mas a conexao falhou"
+    fi
+    return
+  fi
+
+  senha=$(ROFI -dmenu -password -p "senha de $ssid" </dev/null)
+  [ -z "${senha:-}" ] && return 0
+
+  if nmcli device wifi connect "$ssid" password "$senha" >/dev/null 2>&1; then
+    notify "Conectado" "$ssid"
+  else
+    notify "Nao conectou" "Senha incorreta ou fora de alcance"
+  fi
+}
+
+acoes(){
+  local ssid="$1" ativa="$2" i opc
+  local -a itens
+  if [ "$ativa" = "yes" ]; then
+    itens=("$ICON_OFF  desconectar" "$ICON_OFF  esquecer esta rede" "voltar")
+  else
+    itens=("conectar" "$ICON_OFF  esquecer esta rede" "voltar")
+  fi
+
+  i=$(printf '%s\n' "${itens[@]}" | ROFI -dmenu -i -no-custom -format i -p "$ssid")
+  [ -z "${i:-}" ] && return 0
+  opc="${itens[$i]}"
+
+  case "$opc" in
+    *desconectar*) nmcli connection down id "$ssid"   >/dev/null 2>&1 && notify "Desconectado" "$ssid" ;;
+    *esquecer*)    nmcli connection delete id "$ssid" >/dev/null 2>&1 && notify "Rede esquecida" "$ssid" ;;
+    conectar)      conectar "$ssid" ;;
+  esac
+}
+
+main(){
+  carregar
+
+  local -a menu
+  menu=("${LINHAS[@]}" "$ICON_SCAN  procurar redes" "$ICON_CFG  ajustes avancados (nmtui)")
+
+  local i
+  i=$(printf '%s\n' "${menu[@]}" | ROFI -dmenu -i -no-custom -format i -p "wi-fi")
+  [ -z "${i:-}" ] && exit 0
+
+  local n=${#SSIDS[@]}
+  if   [ "$i" -eq "$n" ]; then
+    nmcli device wifi rescan >/dev/null 2>&1
+    sleep 2
+    exec "$0"
+  elif [ "$i" -eq $(( n + 1 )) ]; then
+    setsid kitty -e nmtui >/dev/null 2>&1 < /dev/null &
+    exit 0
+  fi
+
+  local ssid="${SSIDS[$i]}" ativa="${ATIVAS[$i]}"
+  if [ "$ativa" = "yes" ]; then
+    acoes "$ssid" yes
+  else
+    conectar "$ssid"
+  fi
+}
+
+[ -n "${WIFI_MENU_LIB:-}" ] || main "$@"

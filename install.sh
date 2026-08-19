@@ -20,6 +20,10 @@ link "$REPO/bin/set-wallpaper"  "$BIN/set-wallpaper"
 link "$REPO/bin/hyprism-menu"   "$BIN/hyprism-menu"
 link "$REPO/bin/hyprism-desktop" "$BIN/hyprism-desktop"
 link "$REPO/bin/hyprism-appmenu" "$BIN/hyprism-appmenu"
+# The rest of the Hyprism suite (theming engines + the SUPER+I center).
+for tool in control-center rofitheme kittytheme visualconf wifi-menu restart-waybar; do
+  [ -f "$REPO/bin/$tool" ] && link "$REPO/bin/$tool" "$BIN/$tool"
+done
 # Backward-compatible alias (older configs / muscle memory call it hyprtheme).
 link "$REPO/bin/hyprism"        "$BIN/hyprtheme"
 

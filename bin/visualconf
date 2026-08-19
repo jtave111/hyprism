@@ -1,0 +1,695 @@
+#!/usr/bin/env bash
+# =====================================================================
+# visualconf — central visual unica do Hyprland, Rofi e Kitty
+#
+# Sem argumentos abre o painel completo. Tambem aceita:
+#   visualconf hyprland | rofi | kitty | sync | status | doctor
+#   visualconf --json status | visualconf --json doctor
+#
+# Os tres configuradores continuam sendo os motores. Esta central oferece
+# uma navegacao unica e preserva todos os recursos e previas existentes.
+# =====================================================================
+set -u
+
+SELF="$(command -v visualconf 2>/dev/null || printf '%s' "$0")"
+HYPR="${HYPRCONF_BIN:-$HOME/.local/bin/hyprtheme}"
+ROFI="${ROFICONF_BIN:-$HOME/.local/bin/rofitheme}"
+KITTY="${KITTYCONF_BIN:-$HOME/.local/bin/kittytheme}"
+AUDIT="${SYSTEM_AUDIT_BIN:-$HOME/.local/bin/system-audit}"
+
+HYPR_STATE="$HOME/.config/hypr/themes/.state"
+HYPR_ACTIVE="$HOME/.config/hypr/themes/.active"
+ROFI_STATE="$HOME/.config/rofi/themes/.state"
+ROFI_ACTIVE="$HOME/.config/rofi/themes/.active"
+KITTY_CONF="$HOME/.config/kitty/kitty.conf"
+KITTY_ACTIVE="$HOME/.config/kitty/themes/.active"
+WALLFILE="$HOME/.config/hypr/wallpaper"
+BACKUPS="$HOME/.config/visualconf/backups"
+mkdir -p "$BACKUPS"
+
+have(){ command -v "$1" >/dev/null 2>&1; }
+value(){ grep -m1 "^$2=" "$1" 2>/dev/null | cut -d= -f2-; }
+active(){ cat "$1" 2>/dev/null || printf '-'; }
+pretty(){ [ -n "${1:-}" ] && [ "$1" != auto ] && printf '%s' "$1" || printf 'automático'; }
+
+fzf_ui(){
+  local accent
+  accent=$(cat "$HOME/.config/hypr/accent" 2>/dev/null)
+  [[ "$accent" =~ ^#[0-9A-Fa-f]{6}$ ]] || accent='#ff2b2b'
+  fzf --height=96% --layout=reverse --border=rounded --info=inline-right \
+      --ansi --no-separator --margin=0 --padding=1 --cycle \
+      --pointer='▸' --marker='✓' --scrollbar='│' \
+      --color="bg:-1,bg+:#1b1111,fg:#b8b8b8,fg+:#ffffff,hl:$accent,hl+:$accent:bold,pointer:$accent,prompt:$accent:bold,marker:$accent,info:#666666,header:#888888,border:$accent,label:$accent,preview-border:#333333,preview-label:$accent,gutter:-1" \
+      "$@"
+}
+
+pick(){
+  local title="$1" prompt="$2" preview="$3"
+  shift 3
+  printf '%s\n' "$@" | fzf_ui \
+      --delimiter=$'\t' --with-nth=2 \
+      --prompt="  $prompt › " \
+      --border-label="  $title  " --border-label-pos=2 \
+      --list-label='  opções  ' --input-label='  buscar  ' \
+      --header='↑↓ navegar  ·  ENTER abrir  ·  ESC voltar  ·  digite para buscar' \
+      --preview="$preview" --preview-window='right,47%,border-rounded' \
+      --preview-label='  detalhes e estado  '
+}
+
+status_hypr(){
+  local wall
+  wall=$(cat "$WALLFILE" 2>/dev/null)
+  printf '\033[1;31mHYPRLAND\033[0m\n\n'
+  printf '  paleta       %s\n' "$(active "$HYPR_ACTIVE")"
+  printf '  wallpaper    %s\n' "$(basename "${wall:--}")"
+  printf '  borda        %spx\n' "$(value "$HYPR_STATE" border)"
+  printf '  cantos       %spx\n' "$(value "$HYPR_STATE" rounding)"
+  printf '  gaps         %s / %s\n' "$(value "$HYPR_STATE" gaps_in)" "$(value "$HYPR_STATE" gaps_out)"
+  printf '  blur         %s\n' "$(value "$HYPR_STATE" blur)"
+  printf '  sombra       %s\n' "$(value "$HYPR_STATE" shadow)"
+  printf '  janelas      %s · %s\n' "$(value "$HYPR_STATE" float_all)" "$(value "$HYPR_STATE" win_size)"
+  printf '  layout       %s · snap %s\n' "$(value "$HYPR_STATE" layout)" "$(value "$HYPR_STATE" snap)"
+  printf '  touchpad     natural %s · toque %s\n' "$(value "$HYPR_STATE" touch_natural)" "$(value "$HYPR_STATE" touch_tap)"
+  printf '  cursor       %s · %spx\n' "$(value "$HYPR_STATE" cursor_theme)" "$(value "$HYPR_STATE" cursor_size)"
+  printf '  waybar       %spx · %s\n' "$(value "$HYPR_STATE" barh)" "$(value "$HYPR_STATE" barpos)"
+  printf '  notificações %s · %ss\n' "$(value "$HYPR_STATE" notif_position)" "$(value "$HYPR_STATE" notif_timeout)"
+}
+
+status_rofi(){
+  local ff fs border radius gap icons icon_size
+  ff=$(value "$ROFI_STATE" font_face); fs=$(value "$ROFI_STATE" font_size)
+  border=$(value "$ROFI_STATE" border); radius=$(value "$ROFI_STATE" radius)
+  gap=$(value "$ROFI_STATE" row_gap); icon_size=$(value "$ROFI_STATE" icon_size)
+  icons=$(grep -m1 -oE 'show-icons:[[:space:]]*(true|false)' "$HOME/.config/rofi/config.rasi" 2>/dev/null | awk '{print $2}')
+  printf '\033[1;31mROFI LAUNCHER\033[0m\n\n'
+  printf '  paleta       %s\n' "$(active "$ROFI_ACTIVE")"
+  printf '  layout       %s\n' "$(value "$ROFI_STATE" layout)"
+  printf '  largura      %spx\n' "$(value "$ROFI_STATE" width)"
+  printf '  linhas       %s\n' "$(value "$ROFI_STATE" lines)"
+  printf '  posição      %s\n' "$(value "$ROFI_STATE" pos)"
+  printf '  opacidade    %s%%\n' "$(value "$ROFI_STATE" opacity)"
+  printf '  fonte        %s · tamanho %s\n' "$(pretty "$ff")" "$(pretty "$fs")"
+  printf '  moldura      %s · cantos %s\n' "$(pretty "$border")" "$(pretty "$radius")"
+  printf '  grade        %s coluna(s) · gap %s\n' "$(value "$ROFI_STATE" columns)" "$(pretty "$gap")"
+  printf '  busca        %s · ordenar %s\n' "$(value "$ROFI_STATE" matching)" "$(value "$ROFI_STATE" sort_enabled)"
+  printf '  ícones       %s · tamanho %s\n' "${icons:-false}" "$(pretty "$icon_size")"
+}
+
+kitty_value(){ grep -m1 -E "^$1([[:space:]]|$)" "$KITTY_CONF" 2>/dev/null | sed -E "s/^$1[[:space:]]+//"; }
+status_kitty(){
+  printf '\033[1;31mKITTY + SHELL\033[0m\n\n'
+  printf '  tema         %s\n' "$(active "$KITTY_ACTIVE")"
+  printf '  fonte        %s\n' "$(kitty_value font_family)"
+  printf '  tamanho      %s\n' "$(kitty_value font_size)"
+  printf '  opacidade    %s\n' "$(kitty_value background_opacity)"
+  printf '  blur         %s\n' "$(kitty_value background_blur)"
+  printf '  shell        %s\n' "$(kitty_value shell)"
+  printf '  cursor       %s · pisca %s\n' "$(kitty_value cursor_shape)" "$(kitty_value cursor_blink_interval)"
+  printf '  padding      %spx\n' "$(kitty_value window_padding_width)"
+  printf '  abas         %s · %s\n' "$(kitty_value tab_bar_edge)" "$(kitty_value tab_bar_style)"
+  printf '  histórico    %s linhas\n' "$(kitty_value scrollback_lines)"
+}
+
+ini_value(){ grep -m1 "^$2=" "$1" 2>/dev/null | cut -d= -f2-; }
+status_apps(){
+  local gtk="$HOME/.config/gtk-3.0/settings.ini"
+  local qt="$HOME/.config/qt6ct/qt6ct.conf"
+  printf '\033[1;31mAPLICATIVOS E SISTEMA\033[0m\n\n'
+  printf '  tema GTK     %s\n' "$(ini_value "$gtk" gtk-theme-name)"
+  printf '  ícones GTK   %s\n' "$(ini_value "$gtk" gtk-icon-theme-name)"
+  printf '  cursor GTK   %s\n' "$(ini_value "$gtk" gtk-cursor-theme-name)"
+  printf '  estilo Qt    %s\n' "$(ini_value "$qt" style)"
+  printf '  esquema Qt   %s\n' "$(basename "$(ini_value "$qt" color_scheme)" 2>/dev/null)"
+  printf '\n  rede         nm-connection-editor\n'
+  printf '  áudio        pavucontrol\n'
+  printf '  bluetooth    blueman-manager\n'
+}
+
+status_all(){
+  status_hypr
+  printf '\n'
+  status_rofi
+  printf '\n'
+  status_kitty
+  printf '\n'
+  status_apps
+}
+
+status_json(){
+  jq -n \
+    --arg global_theme "$(active "$HYPR_ACTIVE")" \
+    --arg wallpaper "$(cat "$WALLFILE" 2>/dev/null || true)" \
+    --arg hypr_theme "$(active "$HYPR_ACTIVE")" \
+    --arg rofi_theme "$(active "$ROFI_ACTIVE")" \
+    --arg kitty_theme "$(active "$KITTY_ACTIVE")" \
+    --arg layout "$(value "$HYPR_STATE" layout)" \
+    --arg window_mode "$(value "$HYPR_STATE" float_all)" \
+    --arg window_size "$(value "$HYPR_STATE" win_size)" \
+    --arg bar_enabled "$(value "$HYPR_STATE" bar_enabled)" \
+    --arg rofi_layout "$(value "$ROFI_STATE" layout)" \
+    --arg rofi_matching "$(value "$ROFI_STATE" matching)" \
+    --arg kitty_font "$(kitty_value font_family)" \
+    --arg kitty_font_size "$(kitty_value font_size)" \
+    --arg kitty_opacity "$(kitty_value background_opacity)" \
+    '{schema_version:1, global:{theme:$global_theme, wallpaper:$wallpaper},
+      components:{hyprland:{theme:$hypr_theme, layout:$layout,
+        floating:$window_mode, initial_size:$window_size, waybar:$bar_enabled},
+      rofi:{theme:$rofi_theme, layout:$rofi_layout, matching:$rofi_matching},
+      kitty:{theme:$kitty_theme, font:$kitty_font, font_size:$kitty_font_size,
+        opacity:$kitty_opacity}}}'
+}
+
+doctor_collect(){
+  D_FZF=false; have fzf && D_FZF=true
+  D_JQ=false; have jq && D_JQ=true
+  D_HYPRCTL=false; have hyprctl && D_HYPRCTL=true
+  D_WALL=false; have swaybg && D_WALL=true
+  D_SCRIPTS=false
+  bash -n "$SELF" "$HYPR" "$ROFI" "$KITTY" >/dev/null 2>&1 && D_SCRIPTS=true
+  D_LUA=false
+  lua -e "assert(loadfile('$HOME/.config/hypr/hyprland.lua'))" >/dev/null 2>&1 && D_LUA=true
+  D_HYPR_CONFIG=false
+  Hyprland --verify-config --config "$HOME/.config/hypr/hyprland.lua" 2>/dev/null \
+    | grep -q 'config ok' && D_HYPR_CONFIG=true
+  D_ROFI_THEME=false
+  rofi -no-config -theme "$HOME/.config/rofi/themes/current.rasi" -dump-theme \
+    >/dev/null 2>&1 && D_ROFI_THEME=true
+  D_WALL_FILE=false
+  [ -f "$(cat "$WALLFILE" 2>/dev/null)" ] && D_WALL_FILE=true
+  D_OK=false
+  [ "$D_FZF" = true ] && [ "$D_JQ" = true ] && [ "$D_HYPRCTL" = true ] \
+    && [ "$D_WALL" = true ] && [ "$D_SCRIPTS" = true ] && [ "$D_LUA" = true ] \
+    && [ "$D_HYPR_CONFIG" = true ] && [ "$D_ROFI_THEME" = true ] \
+    && [ "$D_WALL_FILE" = true ] && D_OK=true
+}
+
+doctor_json(){
+  doctor_collect
+  jq -n --argjson ok "$D_OK" \
+    --argjson fzf "$D_FZF" --argjson jq "$D_JQ" \
+    --argjson hyprctl "$D_HYPRCTL" --argjson wallpaper_backend "$D_WALL" \
+    --argjson scripts "$D_SCRIPTS" --argjson lua "$D_LUA" \
+    --argjson hypr_config "$D_HYPR_CONFIG" --argjson rofi_theme "$D_ROFI_THEME" \
+    --argjson wallpaper_file "$D_WALL_FILE" \
+    '{schema_version:1, ok:$ok, checks:{commands:{fzf:$fzf,jq:$jq,hyprctl:$hyprctl,
+      wallpaper_backend:$wallpaper_backend}, syntax:{scripts:$scripts,lua:$lua,
+      hyprland:$hypr_config,rofi:$rofi_theme}, files:{wallpaper:$wallpaper_file}}}'
+  [ "$D_OK" = true ]
+}
+
+doctor_human(){
+  doctor_collect
+  printf '\n  DIAGNÓSTICO DO VISUALCONF\n\n'
+  local name val
+  while IFS='|' read -r name val; do
+    if [ "$val" = true ]; then printf '  \033[32m✓\033[0m %s\n' "$name"
+    else printf '  \033[31m✗\033[0m %s\n' "$name"; fi
+  done <<EOF
+fzf disponível|$D_FZF
+jq disponível|$D_JQ
+Hyprland IPC disponível|$D_HYPRCTL
+backend de wallpaper|$D_WALL
+scripts Bash válidos|$D_SCRIPTS
+arquivo Lua válido|$D_LUA
+configuração Hyprland válida|$D_HYPR_CONFIG
+tema Rofi válido|$D_ROFI_THEME
+wallpaper selecionado existe|$D_WALL_FILE
+EOF
+  printf '\n  resultado: %s\n' "$([ "$D_OK" = true ] && echo tudo certo || echo precisa de atenção)"
+  [ "$D_OK" = true ]
+}
+
+detail(){
+  local key="${1:-}" section="${2:-}"
+  case "$key" in
+    hyprland) echo 'Controle o compositor, as janelas e toda a área de trabalho.' ;;
+    rofi) echo 'Personalize o launcher usado por SUPER + ESPAÇO.' ;;
+    kitty) echo 'Configure terminal, fonte, shell e prompt em um só fluxo.' ;;
+    apps) echo 'Ajuste aplicativos GTK/Qt e ferramentas essenciais do sistema.' ;;
+    backup) echo 'Salve, restaure ou reaplique o visual completo com segurança.' ;;
+    sync|sincronizar) echo 'Usa o tema global ativo do Hyprland no Kitty, Waybar e Rofi.' ;;
+    random|aleatorio) echo 'Escolhe uma paleta aleatória e aplica em todo o desktop.' ;;
+    status|config) echo 'Mostra todos os valores que estão ativos neste momento.' ;;
+    buscar) echo 'Encontre qualquer ajuste pelo nome sem navegar pelas categorias.' ;;
+    doctor|diagnostico) echo 'Verifica programas, arquivos e sintaxe sem alterar nada.' ;;
+    paleta) echo 'Escolha as cores e veja a prévia antes de confirmar.' ;;
+    wallpaper) echo 'Navegue pelos wallpapers com troca ao vivo pelas setas.' ;;
+    bordas) echo 'Mude a cor e a intensidade das bordas ativa e inativa.' ;;
+    aparencia) echo 'Ajuste dimensões, espaçamento e geometria do componente.' ;;
+    efeitos) echo 'Controle blur, sombra, opacidade e animações.' ;;
+    barra) echo 'Configure a Waybar e os elementos exibidos nela.' ;;
+    modulos) echo 'Escolha exatamente quais módulos aparecem na Waybar.' ;;
+    janelas) echo 'Defina modo flutuante/tiling e comportamento de abertura.' ;;
+    entrada) echo 'Configure mouse, touchpad, gestos, rolagem e sensibilidade.' ;;
+    cursor) echo 'Escolha tema, tamanho e ocultação automática do cursor.' ;;
+    bloqueio) echo 'Personalize fundo, relógio, brilho e blur do bloqueio.' ;;
+    notificacoes) echo 'Ajuste posição, largura, duração e ícones das notificações.' ;;
+    fonte) echo 'Escolha família e tamanho da fonte com prévia.' ;;
+    atalhos) echo 'Consulte os atalhos de teclado configurados.' ;;
+    preset) echo 'Salve ou carregue uma combinação do Hyprland.' ;;
+    layout) echo 'Altere a organização visual do launcher.' ;;
+    tipografia) echo 'Ajuste família e tamanho da fonte usada no launcher.' ;;
+    moldura) echo 'Ajuste borda e arredondamento da janela do launcher.' ;;
+    grade) echo 'Configure densidade, colunas, espaçamento, ícones e scrollbar.' ;;
+    busca) echo 'Escolha algoritmo, ordenação, maiúsculas e tokenização da busca.' ;;
+    posicao) echo 'Escolha onde o launcher aparece na tela.' ;;
+    opacidade|transparencia) echo 'Controle transparência e desfoque do fundo.' ;;
+    icones) echo 'Mostre ou esconda ícones de aplicativos.' ;;
+    testar) echo 'Abra uma demonstração real para conferir o resultado.' ;;
+    perfis) echo 'Aplique cores, opacidade e prompt como um conjunto.' ;;
+    shell) echo 'Escolha o shell usado nas novas abas do terminal.' ;;
+    prompt) echo 'Escolha um prompt Starship com prévia real.' ;;
+    janela) echo 'Ajuste padding, tamanho inicial, decoração e memorização.' ;;
+    abas) echo 'Configure posição, estilo, alinhamento e títulos das abas.' ;;
+    historico) echo 'Controle scrollback, velocidade, seleção e comportamento do mouse.' ;;
+    alertas) echo 'Configure bell sonoro, alerta visual e atenção da janela.' ;;
+    comportamento)
+      if [ "$section" = rofi ]; then
+        echo 'Ajuste navegação circular, seleção pelo mouse e clique externo.'
+      else
+        echo 'Ajuste links, foco, integração do shell e fechamento.'
+      fi ;;
+    gtk) echo 'Abra o nwg-look para tema, fonte, ícones e cursor GTK.' ;;
+    qt) echo 'Abra o qt6ct para estilo, cores, fonte e ícones Qt.' ;;
+    rede) echo 'Configure Wi-Fi, VPN, DNS, IP fixo e rotas.' ;;
+    audio) echo 'Configure volumes, microfones, saídas e perfis de áudio.' ;;
+    bluetooth) echo 'Pareie e gerencie dispositivos Bluetooth.' ;;
+    monitor) echo 'Acompanhe CPU, memória, discos e processos pelo btop.' ;;
+    scanner) echo 'Mapeia espaço, caches, pacotes órfãos e restos sem remover nada.' ;;
+    salvar) echo 'Cria uma cópia das configurações visuais atuais.' ;;
+    restaurar) echo 'Restaura Hyprland, Waybar, Rofi, Kitty e prompt.' ;;
+    reaplicar) echo 'Regenera os arquivos e recarrega todos os componentes.' ;;
+    voltar|sair) echo 'Volta ao nível anterior sem alterar configurações.' ;;
+  esac
+}
+
+quick_preview(){
+  local key="${1:-}" section action
+  section="${key%%:*}"; action="${key#*:}"
+  case "$section" in hypr) section=hyprland ;; sistema) section=apps ;; global) section=all ;; esac
+  preview "$section" "$action"
+}
+
+preview(){
+  local section="${1:-all}" action="${2:-${1:-all}}"
+  printf '\033[1m%s\033[0m\n\n' "$(detail "$action" "$section")"
+  printf '\033[38;5;8m────────────────────────────────\033[0m\n\n'
+  case "$section" in
+    hyprland|hypr-*) status_hypr ;;
+    rofi|rofi-*)     status_rofi ;;
+    kitty|kitty-*)   status_kitty ;;
+    apps|sistema) status_apps ;;
+    sync|random|backup|status|all|sair) status_all ;;
+    *) status_all ;;
+  esac
+  printf '\n\033[38;5;8m────────────────────────────────\033[0m\n'
+  printf '\033[38;5;8mENTER seleciona · ESC volta\033[0m\n'
+}
+
+run(){
+  local bin="$1"; shift
+  [ -x "$bin" ] || { printf 'ferramenta ausente: %s\n' "$bin"; sleep 2; return 1; }
+  "$bin" "$@"
+}
+
+gui(){
+  have "$1" || { printf 'Programa não instalado: %s\n' "$1"; sleep 2; return 1; }
+  setsid "$@" >/dev/null 2>&1 < /dev/null &
+}
+
+apps_menu(){
+  while true; do
+    local c key
+    c=$(pick 'APLICATIVOS E SISTEMA' 'sistema' "$SELF __preview apps {1}" \
+      $'gtk\tTema dos aplicativos GTK\tCores, ícones, fonte e cursor pelo nwg-look' \
+      $'qt\tTema dos aplicativos Qt\tEstilo, cores, fonte e ícones pelo qt6ct' \
+      $'rede\tConexões de rede\tWi-Fi, VPN, IP fixo, DNS e rotas' \
+      $'audio\tÁudio\tVolumes, microfones, saídas e perfis' \
+      $'bluetooth\tBluetooth\tDispositivos, pareamento e conexões' \
+      $'monitor\tMonitor do sistema\tProcessos, memória, CPU e discos no btop' \
+      $'scanner\tScanner do sistema\tEspaço, caches, órfãos e restos do KDE (somente leitura)' \
+      $'voltar\t← Voltar\tRetornar à central') || return 0
+    key="${c%%$'\t'*}"
+    case "$key" in
+      gtk) gui nwg-look ;; qt) gui qt6ct ;;
+      rede) gui nm-connection-editor ;; audio) gui pavucontrol ;;
+      bluetooth) gui blueman-manager ;; monitor) have btop && btop ;;
+      scanner) clear; run "$AUDIT" scan; printf '\n'; read -rp '  [enter] voltar ' _ ;;
+      voltar) return 0 ;;
+    esac
+  done
+}
+
+quick_search(){
+  while true; do
+    local c key
+    c=$(pick 'BUSCA RÁPIDA' 'buscar configuração' "$SELF __quickpreview {1}" \
+      $'hypr:paleta\tHyprland · Paleta global\tCores de todo o desktop' \
+      $'hypr:wallpaper\tHyprland · Wallpaper\tPrévia ao vivo e tela de bloqueio' \
+      $'hypr:bordas\tHyprland · Bordas\tCores ativa e inativa' \
+      $'hypr:aparencia\tHyprland · Geometria\tBorda, cantos e espaçamento' \
+      $'hypr:efeitos\tHyprland · Efeitos\tBlur, sombra e opacidade' \
+      $'hypr:barra\tWaybar · Aparência\tPosição, tamanho e fonte' \
+      $'hypr:modulos\tWaybar · Módulos\tIndicadores exibidos na barra' \
+      $'hypr:janelas\tHyprland · Janelas\tLayout, encaixe, foco e tamanho inicial' \
+      $'hypr:entrada\tHyprland · Entrada\tMouse, touchpad, teclado e gestos' \
+      $'hypr:cursor\tHyprland · Cursor\tTema, tamanho e ocultação' \
+      $'hypr:bloqueio\tHyprland · Bloqueio\tFundo, blur, brilho e relógio' \
+      $'hypr:notificacoes\tHyprland · Notificações\tPosição, tamanho, tempo e ícones' \
+      $'hypr:fonte\tWaybar · Fonte\tFamília e tamanho' \
+      $'hypr:atalhos\tHyprland · Atalhos\tLista de teclas configuradas' \
+      $'hypr:preset\tHyprland · Presets\tSalvar ou carregar combinações' \
+      $'rofi:paleta\tRofi · Paleta\tCores compartilhadas' \
+      $'rofi:layout\tRofi · Layout\tMinimal ou Spotlight' \
+      $'rofi:janela\tRofi · Janela\tTamanho, linhas e posição' \
+      $'rofi:fonte\tRofi · Tipografia\tFamília e tamanho' \
+      $'rofi:moldura\tRofi · Moldura\tBorda e arredondamento' \
+      $'rofi:grade\tRofi · Grade\tDensidade, colunas, gaps e ícones' \
+      $'rofi:prompt\tRofi · Prompt\tBusca e formato dos resultados' \
+      $'rofi:busca\tRofi · Busca\tAlgoritmo, ordenação e tokens' \
+      $'rofi:comportamento\tRofi · Interação\tTeclado, mouse e clique externo' \
+      $'rofi:opacidade\tRofi · Opacidade\tTransparência da janela' \
+      $'kitty:perfis\tKitty · Perfis\tCores, transparência e prompt' \
+      $'kitty:tema\tKitty · Tema\tCores do terminal' \
+      $'kitty:transparencia\tKitty · Transparência\tOpacidade e blur' \
+      $'kitty:fonte\tKitty · Fonte\tFamília e tamanho' \
+      $'kitty:cursor\tKitty · Cursor\tForma, piscar e espessura' \
+      $'kitty:janela\tKitty · Janela\tPadding, tamanho e decoração' \
+      $'kitty:abas\tKitty · Abas\tPosição, estilo e títulos' \
+      $'kitty:historico\tKitty · Histórico\tScrollback, rolagem e mouse' \
+      $'kitty:alertas\tKitty · Alertas\tSom, flash e atenção' \
+      $'kitty:comportamento\tKitty · Comportamento\tLinks, foco e integração' \
+      $'kitty:shell\tKitty · Shell\tFish, Bash ou Zsh' \
+      $'kitty:prompt\tKitty · Prompt\tModelos Starship' \
+      $'sistema:gtk\tSistema · GTK\tTema, ícones, fonte e cursor' \
+      $'sistema:qt\tSistema · Qt\tEstilo, cores, fonte e ícones' \
+      $'sistema:rede\tSistema · Rede\tWi-Fi, VPN, DNS e IP' \
+      $'sistema:audio\tSistema · Áudio\tVolumes, entradas e saídas' \
+      $'sistema:bluetooth\tSistema · Bluetooth\tPareamento e conexões' \
+      $'sistema:scanner\tSistema · Scanner\tEspaço, órfãos, KDE e caches sem remover' \
+      $'global:sync\tGlobal · Sincronizar\tHyprland → todos os componentes' \
+      $'global:status\tGlobal · Resumo\tTodos os valores ativos' \
+      $'global:doctor\tGlobal · Diagnóstico\tDependências e sintaxe' \
+      $'voltar:voltar\t← Voltar\tRetornar à central') || return 0
+    key="${c%%$'\t'*}"
+    case "$key" in
+      hypr:*) run "$HYPR" "${key#*:}" ;;
+      rofi:*) run "$ROFI" "${key#*:}" ;;
+      kitty:*) run "$KITTY" "${key#*:}" ;;
+      sistema:gtk) gui nwg-look ;; sistema:qt) gui qt6ct ;;
+      sistema:rede) gui nm-connection-editor ;; sistema:audio) gui pavucontrol ;;
+      sistema:bluetooth) gui blueman-manager ;;
+      sistema:scanner) clear; run "$AUDIT" scan; printf '\n'; read -rp '  [enter] voltar ' _ ;;
+      global:sync) sync_all ;; global:status) status_all; printf '\n'; read -rp '  [enter] voltar ' _ ;;
+      global:doctor) doctor_human; printf '\n'; read -rp '  [enter] voltar ' _ ;;
+      voltar:voltar) return 0 ;;
+    esac
+  done
+}
+
+copy_if(){
+  local src="$1" dst="$2"
+  [ -e "$src" ] || return 0
+  mkdir -p "$(dirname "$dst")"
+  cp -a "$src" "$dst"
+}
+
+backup_create(){
+  local name dir
+  name=$(date +'%Y-%m-%d_%H-%M-%S')
+  dir="$BACKUPS/$name"
+  mkdir -p "$dir"
+  copy_if "$HYPR_STATE" "$dir/hypr/state"
+  copy_if "$HYPR_ACTIVE" "$dir/hypr/active"
+  copy_if "$WALLFILE" "$dir/hypr/wallpaper"
+  copy_if "$HOME/.config/hypr/accent" "$dir/hypr/accent"
+  copy_if "$HOME/.config/waybar/config.jsonc" "$dir/waybar/config.jsonc"
+  copy_if "$ROFI_STATE" "$dir/rofi/state"
+  copy_if "$ROFI_ACTIVE" "$dir/rofi/active"
+  copy_if "$HOME/.config/rofi/config.rasi" "$dir/rofi/config.rasi"
+  copy_if "$KITTY_CONF" "$dir/kitty/kitty.conf"
+  copy_if "$KITTY_ACTIVE" "$dir/kitty/active"
+  copy_if "$HOME/.config/kitty/themes/current.conf" "$dir/kitty/current.conf"
+  copy_if "$HOME/.config/starship.toml" "$dir/starship.toml"
+  printf '\n  Backup salvo: %s\n' "$name"
+  sleep 1.3
+}
+
+reapply_all(){
+  run "$HYPR" render
+  local ra ka
+  ra=$(cat "$ROFI_ACTIVE" 2>/dev/null); [ -n "${ra:-}" ] && run "$ROFI" "$ra"
+  ka=$(cat "$KITTY_ACTIVE" 2>/dev/null); [ -n "${ka:-}" ] && run "$KITTY" "$ka"
+}
+
+backup_restore(){
+  local sel dir
+  sel=$(find "$BACKUPS" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort -r \
+      | fzf_ui --height=70% --border-label='  RESTAURAR VISUAL  ' \
+        --prompt='  backup › ' --header='ENTER restaura · ESC cancela')
+  [ -n "${sel:-}" ] || return 0
+  dir="$BACKUPS/$sel"
+  copy_if "$dir/hypr/state" "$HYPR_STATE"
+  copy_if "$dir/hypr/active" "$HYPR_ACTIVE"
+  copy_if "$dir/hypr/wallpaper" "$WALLFILE"
+  copy_if "$dir/hypr/accent" "$HOME/.config/hypr/accent"
+  copy_if "$dir/waybar/config.jsonc" "$HOME/.config/waybar/config.jsonc"
+  copy_if "$dir/rofi/state" "$ROFI_STATE"
+  copy_if "$dir/rofi/active" "$ROFI_ACTIVE"
+  copy_if "$dir/rofi/config.rasi" "$HOME/.config/rofi/config.rasi"
+  copy_if "$dir/kitty/kitty.conf" "$KITTY_CONF"
+  copy_if "$dir/kitty/active" "$KITTY_ACTIVE"
+  copy_if "$dir/kitty/current.conf" "$HOME/.config/kitty/themes/current.conf"
+  copy_if "$dir/starship.toml" "$HOME/.config/starship.toml"
+  reapply_all
+  printf '\n  Backup restaurado: %s\n' "$sel"
+  sleep 1.3
+}
+
+backup_menu(){
+  while true; do
+    local c key
+    c=$(pick 'GERENCIAR VISUAL' 'visual' "$SELF __preview all {1}" \
+      $'salvar\tCriar backup agora\tGuarda Hyprland, Waybar, Rofi, Kitty e prompt' \
+      $'restaurar\tRestaurar backup\tVoltar para um visual salvo anteriormente' \
+      $'reaplicar\tReaplicar configuração\tRegenerar e recarregar todos os componentes' \
+      $'sincronizar\tSincronizar tema global\tAplicar a paleta do Hyprland em todo o desktop' \
+      $'aleatorio\tVisual aleatório\tEscolher e sincronizar uma paleta aleatória' \
+      $'voltar\t← Voltar\tRetornar à central') || return 0
+    key="${c%%$'\t'*}"
+    case "$key" in
+      salvar) backup_create ;; restaurar) backup_restore ;;
+      reaplicar) reapply_all ;; sincronizar) sync_all ;; aleatorio) random_all ;;
+      voltar) return 0 ;;
+    esac
+  done
+}
+
+hypr_menu(){
+  while true; do
+    local c key
+    c=$(pick 'HYPRLAND' 'hypr' "$SELF __preview hyprland {1}" \
+      $'paleta\tPaleta de cores\tHyprland, Waybar, bloqueio e notificações' \
+      $'wallpaper\tWallpaper\tPrévia ao vivo com as setas' \
+      $'bordas\tBordas das janelas\tCores ativa/inativa e intensidade' \
+      $'aparencia\tGeometria\tEspessura, cantos e espaçamento' \
+      $'efeitos\tEfeitos\tBlur, sombra, opacidade e animações' \
+      $'barra\tWaybar\tAltura, posição e aparência da barra' \
+      $'modulos\tMódulos da Waybar\tEscolher cada indicador exibido' \
+      $'janelas\tJanelas\tFlutuante, tiling e tamanho inicial' \
+      $'entrada\tMouse e touchpad\tGestos, rolagem, toque e sensibilidade' \
+      $'cursor\tCursor do sistema\tTema, tamanho e ocultação' \
+      $'bloqueio\tTela de bloqueio\tFundo, blur, brilho, relógio e cursor' \
+      $'notificacoes\tNotificações\tPosição, largura, tempo e ícones' \
+      $'fonte\tFonte da barra\tFamília e tamanho' \
+      $'atalhos\tAtalhos\tConsultar todas as teclas' \
+      $'preset\tPresets\tSalvar ou restaurar o visual completo' \
+      $'config\tResumo atual\tMostrar toda a configuração ativa' \
+      $'voltar\t← Voltar\tRetornar à central') || return 0
+    key="${c%%$'\t'*}"
+    case "$key" in
+      paleta) run "$HYPR" paleta ;; wallpaper) run "$HYPR" wallpaper ;;
+      bordas) run "$HYPR" bordas ;; aparencia) run "$HYPR" aparencia ;;
+      efeitos) run "$HYPR" efeitos ;; barra) run "$HYPR" barra ;;
+      modulos) run "$HYPR" modulos ;; janelas) run "$HYPR" janelas ;;
+      entrada) run "$HYPR" entrada ;; cursor) run "$HYPR" cursor ;;
+      bloqueio) run "$HYPR" bloqueio ;; notificacoes) run "$HYPR" notificacoes ;;
+      fonte) run "$HYPR" fonte ;;
+      atalhos) run "$HYPR" atalhos ;; preset) run "$HYPR" preset ;;
+      config) run "$HYPR" config ;; voltar) return 0 ;;
+    esac
+  done
+}
+
+rofi_menu(){
+  while true; do
+    local c key
+    c=$(pick 'ROFI LAUNCHER' 'rofi' "$SELF __preview rofi {1}" \
+      $'paleta\tPaleta de cores\tUsa as mesmas famílias do Kitty' \
+      $'layout\tLayout\tMinimal ou Spotlight' \
+      $'janela\tJanela e posição\tTamanho, linhas e nove posições na tela' \
+      $'tipografia\tTipografia\tFamília e tamanho da fonte' \
+      $'moldura\tMoldura\tBorda e arredondamento' \
+      $'grade\tGrade e conteúdo\tDensidade, colunas, gaps, ícones e scrollbar' \
+      $'prompt\tPrompt e resultados\tTexto de busca e formato dos aplicativos' \
+      $'busca\tBusca e ordenação\tAlgoritmo, ordem, maiúsculas e tokens' \
+      $'comportamento\tInteração\tNavegação circular, mouse e clique externo' \
+      $'opacidade\tTransparência\tOpacidade da janela' \
+      $'testar\tTestar launcher\tAbrir uma demonstração real' \
+      $'config\tResumo atual\tMostrar a configuração ativa' \
+      $'voltar\t← Voltar\tRetornar à central') || return 0
+    key="${c%%$'\t'*}"
+    case "$key" in
+      paleta) run "$ROFI" paleta ;; layout) run "$ROFI" layout ;;
+      janela) run "$ROFI" janela ;; tipografia) run "$ROFI" fonte ;;
+      moldura) run "$ROFI" moldura ;; grade) run "$ROFI" grade ;;
+      prompt) run "$ROFI" prompt ;; busca) run "$ROFI" busca ;;
+      comportamento) run "$ROFI" comportamento ;;
+      opacidade) run "$ROFI" opacidade ;;
+      testar) run "$ROFI" testar ;; config) run "$ROFI" config ;;
+      voltar) return 0 ;;
+    esac
+  done
+}
+
+kitty_menu(){
+  while true; do
+    local c key
+    c=$(pick 'KITTY + SHELL' 'kitty' "$SELF __preview kitty {1}" \
+      $'perfis\tPerfis completos\tCores, transparência e prompt combinados' \
+      $'tema\tTema de cores\tAplicação ao vivo no terminal' \
+      $'transparencia\tTransparência e blur\tFundo do Kitty' \
+      $'fonte\tFonte do terminal\tFamília e tamanho com amostra' \
+      $'shell\tShell padrão\tFish, Bash ou Zsh' \
+      $'prompt\tPrompt\tModelos Starship com prévia real' \
+      $'cursor\tCursor do terminal\tForma, piscar e espessura' \
+      $'janela\tJanela do Kitty\tPadding, tamanho, decoração e memória' \
+      $'abas\tAbas do terminal\tPosição, estilo, alinhamento e títulos' \
+      $'historico\tHistórico e mouse\tScrollback, rolagem, seleção e ocultação' \
+      $'alertas\tAlertas do terminal\tSom, flash visual e pedido de atenção' \
+      $'comportamento\tComportamento avançado\tLinks, foco, integração e fechamento' \
+      $'config\tResumo atual\tMostrar a configuração ativa' \
+      $'voltar\t← Voltar\tRetornar à central') || return 0
+    key="${c%%$'\t'*}"
+    case "$key" in
+      perfis) run "$KITTY" perfis ;; tema) run "$KITTY" tema ;;
+      transparencia) run "$KITTY" transparencia ;; fonte) run "$KITTY" fonte ;;
+      shell) run "$KITTY" shell ;; prompt) run "$KITTY" prompt ;;
+      cursor) run "$KITTY" cursor ;; janela) run "$KITTY" janela ;;
+      abas) run "$KITTY" abas ;; historico) run "$KITTY" historico ;;
+      alertas) run "$KITTY" alertas ;; comportamento) run "$KITTY" comportamento ;;
+      config) run "$KITTY" config ;; voltar) return 0 ;;
+    esac
+  done
+}
+
+sync_all(){
+  local theme shared
+  theme=$(cat "$HYPR_ACTIVE" 2>/dev/null)
+  [ -n "${theme:-}" ] || { echo 'O Hyprland ainda não tem um tema global ativo.'; sleep 2; return 1; }
+
+  # O Hyprland e a fonte global. A paleta especial antiga do SDDM nao possui
+  # um tema Kitty proprio, portanto usa seu equivalente terminal-red.
+  shared="$theme"
+  if [ ! -f "$HOME/.config/kitty/themes/$shared.conf" ] && [ "$shared" = sddm-terminal-red ]; then
+    shared=terminal-red
+  fi
+  if [ ! -f "$HOME/.config/kitty/themes/$shared.conf" ]; then
+    printf '  A paleta global "%s" ainda não possui versão para o Kitty.\n' "$theme"
+    sleep 2
+    return 1
+  fi
+  if [ ! -f "$HOME/.config/rofi/themes/palettes/$shared.rasi" ]; then
+    run "$ROFI" -g >/dev/null || return 1
+  fi
+
+  printf '\n  Tema global do Hyprland: \033[1;31m%s\033[0m\n' "$theme"
+  printf '  Aplicando no Kitty e no Rofi...\n\n'
+  run "$KITTY" "$shared" || return 1
+  run "$ROFI" "$shared" || return 1
+  run "$HYPR" render >/dev/null || return 1
+  printf '\n  Pronto: Hyprland → Waybar, bloqueio, notificações, Rofi e Kitty.\n'
+  sleep 1.4
+}
+
+random_all(){
+  run "$HYPR" --random
+  sync_all
+}
+
+main_menu(){
+  have fzf || { echo 'Instale o fzf para abrir a central visual.'; return 1; }
+  while true; do
+    local c key
+    c=$(pick 'CENTRAL VISUAL' 'configurar' "$SELF __preview {1}" \
+      $'buscar\tBuscar qualquer configuração\tPesquisa única em Hyprland, Rofi, Kitty e sistema' \
+      $'hyprland\tHyprland e Waybar\tJanelas, wallpaper, bordas, efeitos e barra' \
+      $'rofi\tRofi Launcher\tLayout, tamanho, posição, cores e ícones' \
+      $'kitty\tKitty e Shell\tTerminal, fontes, transparência, shell e prompt' \
+      $'apps\tAplicativos e sistema\tGTK, Qt, rede, áudio, Bluetooth e processos' \
+      $'backup\tGerenciar visual\tBackup, restauração, reaplicar e sincronizar' \
+      $'sync\tSincronizar tudo\tUsar o tema global ativo do Hyprland em todo o desktop' \
+      $'random\tVisual aleatório\tEscolher uma paleta e aplicar em tudo' \
+      $'status\tResumo completo\tConferir todas as escolhas ativas' \
+      $'doctor\tDiagnóstico\tVerificar dependências, arquivos e sintaxe' \
+      $'sair\tSair\tFechar a central visual') || break
+    key="${c%%$'\t'*}"
+    case "$key" in
+      buscar) quick_search ;; hyprland) hypr_menu ;; rofi) rofi_menu ;; kitty) kitty_menu ;;
+      apps) apps_menu ;; backup) backup_menu ;;
+      sync) sync_all ;; random) random_all ;;
+      status) status_all; printf '\n'; read -rp '  [enter] voltar ' _ ;;
+      doctor) doctor_human; printf '\n'; read -rp '  [enter] voltar ' _ ;;
+      sair) break ;;
+    esac
+  done
+}
+
+usage(){
+  cat <<'EOF'
+visualconf — central única de personalização do desktop
+
+Interface:
+  visualconf                    abre a central visual
+  visualconf hyprland           Hyprland, Waybar, wallpaper e bloqueio
+  visualconf rofi               launcher Rofi
+  visualconf kitty              terminal Kitty e shell
+  visualconf apps               GTK, Qt, rede, áudio e Bluetooth
+
+Automação:
+  visualconf sync               propaga o tema global ativo do Hyprland
+  visualconf random             escolhe um tema global aleatório e sincroniza
+  visualconf status             mostra o estado atual
+  visualconf doctor             verifica dependências, arquivos e sintaxe
+  visualconf audit              executa o scanner somente leitura do sistema
+  visualconf --json status      estado estruturado para scripts
+  visualconf --json doctor      diagnóstico estruturado; falhas retornam != 0
+EOF
+}
+
+if [ "${1:-}" = --json ]; then
+  case "${2:-}" in
+    status|config) status_json ;;
+    doctor|diagnostico) doctor_json ;;
+    *) printf '{"ok":false,"error":"use --json status ou --json doctor"}\n' >&2; exit 2 ;;
+  esac
+  exit
+fi
+
+case "${1:-}" in
+  __preview) preview "${2:-all}" "${3:-${2:-all}}" ;;
+  __quickpreview) quick_preview "${2:-}" ;;
+  hyprland|hypr|hyper) hypr_menu ;;
+  rofi|launcher) rofi_menu ;;
+  kitty|terminal) kitty_menu ;;
+  apps|sistema) apps_menu ;;
+  backup|gerenciar) backup_menu ;;
+  sync) sync_all ;;
+  random|aleatorio) random_all ;;
+  status|config) status_all ;;
+  doctor|diagnostico) doctor_human ;;
+  audit|scanner) run "$AUDIT" scan ;;
+  -h|--help|help|ajuda) usage ;;
+  '') main_menu ;;
+  *) echo "opção inválida: $1"; exit 1 ;;
+esac
