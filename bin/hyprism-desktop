@@ -475,14 +475,21 @@ class Desktop:
                 return True
             if not os.path.exists(CACHE):
                 regen_cache(background=False)
+            # --simple reads the menu from stdin; feed it the cached file.
+            try:
+                fin = open(CACHE, "rb")
+            except OSError:
+                fin = None
             try:
                 self.jgmenu_proc = subprocess.Popen(
                     ["jgmenu", "--simple", "--at-pointer",
-                     "--csv-file", CACHE, "--config-file", JGMENU_RC],
-                    stdout=DEVNULL, stderr=DEVNULL, stdin=DEVNULL,
+                     "--config-file", JGMENU_RC],
+                    stdin=(fin or DEVNULL), stdout=DEVNULL, stderr=DEVNULL,
                     start_new_session=True)
             except OSError:
                 self.jgmenu_proc = None
+            if fin is not None:
+                fin.close()
             regen_cache(background=True)  # refresh for next time
             return True
         # Fallback (jgmenu not installed): the native GTK menu. Raise this
