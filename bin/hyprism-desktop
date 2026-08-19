@@ -344,7 +344,8 @@ def build_appearance(menu):
 
 
 def build_system(menu):
-    menu.append(leaf("Network", lambda: hy("network")))
+    # Network = plain nmtui (the user's choice), in a themed kitty window.
+    menu.append(leaf("Network", lambda: spawn(["kitty", "--class", "hyprism-center", "-e", "nmtui"])))
     menu.append(leaf("Sound", lambda: open_gui(["pavucontrol", "pwvucontrol"])
                      or hy("system")))
     menu.append(leaf("Bluetooth", lambda: open_gui(["blueman-manager", "overskride"])
