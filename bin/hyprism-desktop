@@ -1,0 +1,307 @@
+#!/usr/bin/env python3
+# =====================================================================
+#  hyprism-desktop — the Hyprism desktop right-click menu for Hyprland.
+#
+#  A transparent full-screen wlr-layer-shell surface (one per monitor)
+#  sits just above the wallpaper and below normal windows, so it only
+#  receives clicks on the *empty desktop*. Right-clicking there pops up a
+#  native GTK menu at the cursor: a BlackArch-style, categorized app menu
+#  with cascading submenus that open on hover, styled with a gradient from
+#  the active Hyprism palette. Click away (or right-click again) to dismiss.
+#
+#  The taxonomy is data-driven from pacman groups (blackarch-*), so it is
+#  always complete; only INSTALLED tools appear. English labels.
+#
+#  Requires: python-gobject, gtk-layer-shell (GTK3). Autostarted from
+#  Hyprland: exec-once = ~/.local/bin/hyprism-desktop
+# =====================================================================
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+import gi
+
+gi.require_version("Gtk", "3.0")
+try:
+    gi.require_version("GtkLayerShell", "0.1")
+    from gi.repository import Gtk, Gdk, GtkLayerShell, GLib
+except (ValueError, ImportError):
+    sys.stderr.write("hyprism-desktop: gtk-layer-shell not available; exiting.\n")
+    sys.exit(0)
+
+HOME = os.path.expanduser("~")
+
+# ---- launching --------------------------------------------------------
+DEVNULL = subprocess.DEVNULL
+GUI_APPS = {
+    "wireshark", "zaproxy", "burpsuite", "ghidra", "cutter", "jd-gui",
+    "ettercap-graphical", "zenmap", "remmina", "gparted", "nwg-displays",
+    "blueman-manager", "pavucontrol", "nm-connection-editor",
+}
+
+
+def spawn(cmd):
+    try:
+        subprocess.Popen(cmd, stdout=DEVNULL, stderr=DEVNULL, stdin=DEVNULL,
+                         start_new_session=True)
+    except OSError as exc:
+        sys.stderr.write("hyprism-desktop: launch failed: %s\n" % exc)
+
+
+def launch_app(pkg):
+    exe = pkg if shutil.which(pkg) else None
+    if exe is None:
+        # fall back to any binary the package owns
+        out = run(["pacman", "-Ql", pkg])
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) == 2 and "/bin/" in parts[1] and not parts[1].endswith("/"):
+                exe = parts[1]
+                break
+    exe = exe or pkg
+    if pkg in GUI_APPS:
+        spawn([exe])
+    else:
+        spawn(["kitty", "-e", exe])
+
+
+# ---- pacman data ------------------------------------------------------
+def run(cmd):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True).stdout
+    except OSError:
+        return ""
+
+
+def load_groups():
+    """One-shot: map every blackarch-<group> to its INSTALLED members.
+    Two pacman calls total (fast) instead of one per group."""
+    installed = set(run(["pacman", "-Qq"]).split())
+    names = sorted({
+        line.split()[0]
+        for line in run(["pacman", "-Sg"]).splitlines()
+        if line.startswith("blackarch-")
+    })
+    groups = {}
+    if names:
+        for line in run(["pacman", "-Sg"] + names).splitlines():
+            parts = line.split()
+            if len(parts) == 2 and parts[1] in installed:
+                groups.setdefault(parts[0], []).append(parts[1])
+    for g in groups:
+        groups[g].sort()
+    return installed, groups
+
+
+INSTALLED, GROUPS = load_groups()
+
+
+def group_tools(group):  # group like "blackarch-recon"
+    return GROUPS.get(group, [])
+
+
+SPECIALTIES = [
+    ("Recon & OSINT",          ["recon", "fingerprint", "scanner", "social", "database"]),
+    ("Web & Apps",             ["webapp", "code-audit", "fuzzer", "proxy", "mobile"]),
+    ("Exploitation & Access",  ["exploitation", "backdoor", "dos", "malware", "keylogger", "honeypot"]),
+    ("Networks & Wireless",    ["networking", "wireless", "bluetooth", "sniffer", "spoof", "tunnel", "nfc", "voip"]),
+    ("Reversing & Binary",     ["reversing", "binary", "debugger", "disassembler", "decompiler", "packer", "unpacker"]),
+    ("Forensics & Defense",    ["forensic", "anti-forensic", "defensive", "ids", "threat-model", "stego"]),
+    ("Hardware & Radio",       ["hardware", "radio", "firmware", "drone", "automobile", "gpu"]),
+    ("Crypto & Wordlists",     ["crypto", "cracker", "wordlist"]),
+    ("Misc",                   ["automation", "ai", "config", "windows", "misc"]),
+]
+
+
+def group_title(group):
+    return group.replace("-", " ").title()
+
+
+TERMINALS = ["kitty", "alacritty", "foot", "wezterm", "konsole", "gnome-terminal", "xterm", "st"]
+BROWSERS = ["firefox", "librewolf", "chromium", "google-chrome-stable", "brave",
+            "brave-browser", "vivaldi-stable", "qutebrowser", "tor-browser", "epiphany"]
+
+
+# ---- palette + CSS ----------------------------------------------------
+def palette():
+    p = {}
+    try:
+        txt = open(os.path.join(HOME, ".config/hypr/colors.lua")).read()
+        for k in ("bg", "bg2", "fg", "dim", "line", "accent", "accent_lit", "sel"):
+            m = re.search(k + r'\s*=\s*"(#[0-9A-Fa-f]{6})"', txt)
+            if m:
+                p[k] = m.group(1)
+    except OSError:
+        pass
+    p.setdefault("bg", "#0a0a0a"); p.setdefault("bg2", "#161616")
+    p.setdefault("fg", "#c9c9c9"); p.setdefault("dim", "#7a7a7a")
+    p.setdefault("line", "#202020"); p.setdefault("accent", "#4c4c4c")
+    p.setdefault("accent_lit", "#8a8a8a"); p.setdefault("sel", "#3a0000")
+    return p
+
+
+def css_for(p):
+    return ("""
+menu {
+  background-image: linear-gradient(to bottom, %(bg2)s, %(bg)s);
+  border: 1px solid %(accent)s;
+  padding: 5px;
+  border-radius: 8px;
+}
+menuitem {
+  color: %(fg)s;
+  padding: 5px 16px;
+  margin: 1px 2px;
+  border-radius: 5px;
+}
+menuitem:hover, menuitem:selected {
+  background-image: linear-gradient(to right, %(sel)s, %(accent)s);
+  color: #ffffff;
+}
+separator { background-color: %(line)s; min-height: 1px; margin: 4px 6px; }
+""" % p).encode()
+
+
+def apply_css():
+    prov = Gtk.CssProvider()
+    prov.load_from_data(css_for(palette()))
+    Gtk.StyleContext.add_provider_for_screen(
+        Gdk.Screen.get_default(), prov,
+        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+    )
+
+
+# ---- menu building ----------------------------------------------------
+def leaf(label, cb):
+    it = Gtk.MenuItem(label=label)
+    it.connect("activate", lambda _w: cb())
+    return it
+
+
+def submenu(label, build):
+    it = Gtk.MenuItem(label=label)
+    sub = Gtk.Menu()
+    build(sub)
+    it.set_submenu(sub)
+    return it
+
+
+def build_category(menu, group):
+    tools = group_tools(group)
+    for t in tools:
+        menu.append(leaf(t, lambda pkg=t: launch_app(pkg)))
+    menu.show_all()
+
+
+def build_specialty(menu, groups):
+    added = False
+    for g in groups:
+        grp = "blackarch-" + g
+        if group_tools(grp):
+            menu.append(submenu(group_title(g), lambda m, gg=grp: build_category(m, gg)))
+            added = True
+    if not added:
+        menu.append(Gtk.MenuItem(label="(none installed)"))
+    menu.show_all()
+
+
+def build_blackarch(menu):
+    for label, groups in SPECIALTIES:
+        if any(group_tools("blackarch-" + g) for g in groups):
+            menu.append(submenu(label, lambda m, gg=groups: build_specialty(m, gg)))
+    menu.show_all()
+
+
+def build_list(menu, names):
+    for n in names:
+        if shutil.which(n):
+            menu.append(leaf(n, lambda app=n: spawn([app])))
+    menu.show_all()
+
+
+def build_root():
+    root = Gtk.Menu()
+    root.append(submenu("Terminals", lambda m: build_list(m, TERMINALS)))
+    root.append(submenu("Browsers", lambda m: build_list(m, BROWSERS)))
+    if shutil.which("thunar"):
+        root.append(leaf("Files", lambda: spawn(["thunar"])))
+    root.append(Gtk.SeparatorMenuItem())
+    root.append(submenu("BlackArch", build_blackarch))
+    root.append(Gtk.SeparatorMenuItem())
+    root.append(leaf("Settings (Hyprism)",
+                     lambda: spawn(["kitty", "--class", "hyprism-center", "-e", "hyprism", "menu"])))
+    if shutil.which("hyprlock"):
+        root.append(leaf("Lock screen", lambda: spawn(["hyprlock"])))
+    root.show_all()
+    return root
+
+
+# ---- the desktop surfaces + right-click ------------------------------
+class Desktop:
+    def __init__(self):
+        apply_css()
+        try:
+            settings = Gtk.Settings.get_default()
+            settings.set_property("gtk-menu-popup-delay", 0)  # open submenus on hover, instant
+        except (TypeError, AttributeError):
+            pass
+        self.menu = build_root()
+        self.menu.connect("deactivate", self.on_menu_closed)
+        self.surfaces = []
+        display = Gdk.Display.get_default()
+        n = display.get_n_monitors() if display else 0
+        if n == 0:
+            self.surfaces.append(self.make_surface(None))
+        for i in range(n):
+            self.surfaces.append(self.make_surface(display.get_monitor(i)))
+
+    def make_surface(self, monitor):
+        win = Gtk.Window()
+        win.set_app_paintable(True)
+        visual = win.get_screen().get_rgba_visual()
+        if visual is not None:
+            win.set_visual(visual)
+        win.connect("draw", lambda w, cr: False)
+        GtkLayerShell.init_for_window(win)
+        GtkLayerShell.set_namespace(win, "hyprism-desktop")
+        GtkLayerShell.set_layer(win, GtkLayerShell.Layer.BOTTOM)
+        if monitor is not None:
+            GtkLayerShell.set_monitor(win, monitor)
+        for edge in (GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.BOTTOM,
+                     GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.RIGHT):
+            GtkLayerShell.set_anchor(win, edge, True)
+        GtkLayerShell.set_exclusive_zone(win, -1)
+        GtkLayerShell.set_keyboard_mode(win, GtkLayerShell.KeyboardMode.NONE)
+        win.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+        win.connect("button-press-event", self.on_button)
+        win.connect("destroy", Gtk.main_quit)
+        win.show_all()
+        return win
+
+    def on_button(self, widget, event):
+        if event.button != 3:
+            return False
+        # Raise this surface to the overlay layer so the popup renders above
+        # windows; lower it back when the menu closes.
+        self._active = widget
+        GtkLayerShell.set_keyboard_mode(widget, GtkLayerShell.KeyboardMode.ON_DEMAND)
+        GtkLayerShell.set_layer(widget, GtkLayerShell.Layer.OVERLAY)
+        self.menu.popup_at_pointer(event)
+        return True
+
+    def on_menu_closed(self, _menu):
+        w = getattr(self, "_active", None)
+        if w is not None:
+            GtkLayerShell.set_keyboard_mode(w, GtkLayerShell.KeyboardMode.NONE)
+            GtkLayerShell.set_layer(w, GtkLayerShell.Layer.BOTTOM)
+
+
+def main():
+    Desktop()
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    main()

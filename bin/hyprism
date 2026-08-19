@@ -2451,6 +2451,149 @@ pick_lang(){
   ok "$(t 'language'): $(sget lang)"
 }
 
+# ---------- system launchers ----------
+launch_gui(){ setsid "$@" >/dev/null 2>&1 </dev/null & }
+launch_term(){ setsid kitty -e "$@" >/dev/null 2>&1 </dev/null & }
+first_of(){ local c; for c in "$@"; do have "$c" && { printf '%s' "$c"; return 0; }; done; return 1; }
+
+open_sound(){
+  local g; g=$(first_of pavucontrol pwvucontrol) && { launch_gui "$g"; return; }
+  local t; t=$(first_of wiremix pulsemixer alsamixer) && { launch_term "$t"; return; }
+  warn "$(t 'no sound tool found (install pavucontrol)')"
+}
+open_bluetooth(){
+  local g; g=$(first_of blueman-manager overskride) && { launch_gui "$g"; return; }
+  local t; t=$(first_of bluetuith bluetoothctl) && { launch_term "$t"; return; }
+  warn "$(t 'no bluetooth tool found (install blueman)')"
+}
+open_displays(){
+  local g; g=$(first_of nwg-displays wdisplays) && { launch_gui "$g"; return; }
+  warn "$(t 'no display tool found (install nwg-displays)')"
+}
+
+# ---------- network module (native, replaces net-tui) ----------
+net_summary(){
+  have nmcli || { echo "$(t 'NetworkManager (nmcli) not found')"; return; }
+  local con ip
+  con=$(nmcli -t -f NAME,DEVICE con show --active 2>/dev/null | head -1 | cut -d: -f1)
+  ip=$(nmcli -t -f IP4.ADDRESS device show 2>/dev/null | grep -m1 . | cut -d: -f2)
+  printf '%-12s %s\n' "$(t 'connection')" "${con:-—}"
+  printf '%-12s %s\n' "IP" "${ip:-—}"
+}
+net_wifi(){
+  have nmcli || { err "$(t 'nmcli not found')"; return; }
+  nmcli radio wifi on >/dev/null 2>&1
+  local sel ssid
+  sel=$(nmcli -t -f IN-USE,SIGNAL,SECURITY,SSID dev wifi list --rescan yes 2>/dev/null \
+      | awk -F: 'NF{u=($1=="*")?"● ":"  "; printf "%s%3s%%  %-12s %s\n",u,$2,($3==""?"open":$3),$4}' \
+      | FZF --prompt="$(t 'Wi-Fi networks') > " --header="$(t 'ENTER connects · rescans live')")
+  [ -n "${sel:-}" ] || return 0
+  ssid=$(printf '%s' "$sel" | sed -E 's/^..[ ]*[0-9]+%[ ]+[^ ]+[ ]+//')
+  [ -n "$ssid" ] || return 0
+  if nmcli -t -f NAME con show 2>/dev/null | grep -qx "$ssid"; then
+    nmcli con up id "$ssid" >/dev/null 2>&1 && ok "$(t 'connected'): $ssid" || err "$(t 'failed to connect')"
+  else
+    local pw; printf '  %s: ' "$(t 'password for') $ssid"; read -rs pw; echo
+    if [ -n "$pw" ]; then nmcli dev wifi connect "$ssid" password "$pw" >/dev/null 2>&1
+    else nmcli dev wifi connect "$ssid" >/dev/null 2>&1; fi
+    [ $? -eq 0 ] && ok "$(t 'connected'): $ssid" || err "$(t 'failed to connect')"
+  fi
+}
+net_vpn(){
+  have nmcli || { err "$(t 'nmcli not found')"; return; }
+  local sel name state
+  sel=$(nmcli -t -f NAME,TYPE con show 2>/dev/null | awk -F: '$2 ~ /vpn|wireguard/ {print $1}' \
+      | FZF --prompt="$(t 'VPN / tunnels') > " --header="$(t 'ENTER toggles up/down')")
+  [ -n "${sel:-}" ] || return 0
+  if nmcli -t -f NAME con show --active 2>/dev/null | grep -qx "$sel"; then
+    nmcli con down id "$sel" >/dev/null 2>&1 && ok "$(t 'VPN down'): $sel"
+  else
+    nmcli con up id "$sel" >/dev/null 2>&1 && ok "$(t 'VPN up'): $sel" || err "$(t 'failed')"
+  fi
+}
+net_hostname(){
+  local cur new; cur=$(hostnamectl hostname 2>/dev/null || cat /etc/hostname 2>/dev/null)
+  printf '  %s: %s\n' "$(t 'current hostname')" "$cur"
+  printf '  %s: ' "$(t 'new hostname (empty to cancel)')"; read -r new
+  [ -n "${new:-}" ] || return 0
+  sudo hostnamectl set-hostname "$new" && ok "$(t 'hostname set to'): $new" || err "$(t 'failed (needs sudo)')"
+}
+net_status(){
+  { echo; net_summary; echo
+    nmcli -t -f NAME,TYPE,DEVICE con show --active 2>/dev/null \
+      | awk -F: '{printf "  %-22s %-10s %s\n",$1,$2,$3}'
+    echo; nmcli device status 2>/dev/null | sed 's/^/  /'
+  } | ${PAGER:-less -R}
+}
+net_module(){
+  if ! have nmcli; then
+    warn "$(t 'nmcli not found; opening the legacy net-tui')"
+    have net-tui && launch_term net-tui; return
+  fi
+  while true; do
+    local head c; head=$(net_summary | tr '\n' ' ')
+    c=$( {
+      row wifi     "$(t 'Wi-Fi: scan, connect, forget')"
+      row vpn      "$(t 'VPN and tunnels')"
+      row editor   "$(t 'advanced: fixed IP, DNS, routes (editor)')"
+      row hostname "$(t 'machine name')"
+      row status   "$(t 'detailed status')"
+      row back     "$(t 'back')"
+      } | FZFM --prompt="$(t 'network') > " --header="$head" )
+    case "$(mkey "$c")" in
+      wifi) net_wifi ;;   vpn) net_vpn ;;
+      editor) have nm-connection-editor && launch_gui nm-connection-editor \
+                || { have nmtui && launch_term nmtui; } ;;
+      hostname) net_hostname ;;
+      status) net_status ;;
+      back|"") break ;;
+    esac
+  done
+}
+
+# ---------- system group ----------
+system_menu(){
+  while true; do
+    local c; c=$( {
+      row network   "$(t 'Wi-Fi, VPN, fixed IP, hostname, status')"
+      row sound     "$(t 'volume, inputs and outputs')"
+      row bluetooth "$(t 'pair and manage devices')"
+      row displays  "$(t 'position and resolution')"
+      row back      "$(t 'back')"
+      } | FZFM --prompt="$(t 'system') > " --header="$(t 'network, sound, bluetooth, displays')" )
+    case "$(mkey "$c")" in
+      network)   net_module ;;
+      sound)     open_sound; return ;;
+      bluetooth) open_bluetooth; return ;;
+      displays)  open_displays; return ;;
+      back|"")   break ;;
+    esac
+  done
+}
+
+# ---------- the Hyprism center (SUPER+I) ----------
+center_menu(){
+  have fzf || { warn "$(t 'install fzf for the menu, or use: hyprism <palette>')"; return; }
+  while true; do
+    local c; c=$( {
+      row appearance "$(t 'palette, wallpaper, bar & style, cursor, effects…')"
+      row system     "$(t 'network, sound, bluetooth, displays')"
+      row keys       "$(t 'view keybindings')"
+      row lang       "$(t 'language')  ·  $(sget lang)"
+      row config     "$(t 'see everything active')"
+      row sync       "$(t 'propagate theme to Kitty and Rofi')"
+      row quit       "$(t 'quit')"
+      } | FZFM --prompt='hyprism > ' --height=70% \
+          --header="$(t 'Hyprism · control center')" )
+    case "$(mkey "$c")" in
+      appearance) main_menu ;;   system) system_menu ;;
+      keys) show_binds ;;        lang) pick_lang ;;
+      config) show_config ;;     sync) sync_global ;;
+      quit|"") break ;;
+    esac
+  done
+}
+
 main_menu(){
   have fzf || { warn "$(t 'install fzf for the menu, or use: hyprism <palette>')"; palettes; return; }
   while true; do
@@ -2534,6 +2677,9 @@ case "${1:-}" in
   cursor|ponteiro)   pick_cursor ;;
   lock|bloqueio|hyprlock) pick_bloqueio ;;
   notifications|notificacoes|notify|dunst) pick_notificacoes ;;
+  menu|center|central|centro) center_menu ;;
+  network|rede|net) net_module ;;
+  system|sistema)   system_menu ;;
   font|fonte)       pick_fonte ;;
   lang|idioma|language) if [ -n "${2:-}" ]; then
                           case "$2" in en|pt) sset lang "$2"; lang_init; ok "$(t 'language'): $2" ;;
@@ -2544,7 +2690,7 @@ case "${1:-}" in
   sync)             sync_global ;;
   config)           show_config ;;
   render)           render; ok "$(t 'reapplied')" ;;
-  "")               if have visualconf; then exec visualconf hyprland; else main_menu; fi ;;
+  "")               center_menu ;;
   *) if [ -f "$PAL/$1.env" ]; then apply "$1"
      else err "$(t 'unknown option or palette'): $1"; main_menu; fi ;;
 esac
