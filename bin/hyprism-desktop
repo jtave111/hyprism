@@ -305,6 +305,7 @@ def submenu(label, build):
     it = Gtk.MenuItem(label=label)
     sub = Gtk.Menu()
     build(sub)
+    sub.set_direction(Gtk.TextDirection.LTR)  # cascade to the right
     it.set_submenu(sub)
     return it
 
@@ -470,16 +471,18 @@ def position_config(x, y):
 
 class Desktop:
     def __init__(self):
+        # Force left-to-right so EVERY submenu (and nested submenu) cascades to
+        # the RIGHT by default, instead of GTK opening them to the left.
+        Gtk.Widget.set_default_direction(Gtk.TextDirection.LTR)
         apply_css()
         self.jgmenu_proc = None
-        if shutil.which("jgmenu"):
-            regen_cache(background=False)  # warm the cache once at startup
         try:
             settings = Gtk.Settings.get_default()
             settings.set_property("gtk-menu-popup-delay", 0)  # open submenus on hover, instant
         except (TypeError, AttributeError):
             pass
         self.menu = build_root()
+        self.menu.set_direction(Gtk.TextDirection.LTR)
         self.menu.connect("deactivate", self.on_menu_closed)
         self.surfaces = []
         display = Gdk.Display.get_default()
@@ -523,7 +526,13 @@ class Desktop:
         self._active = widget
         GtkLayerShell.set_keyboard_mode(widget, GtkLayerShell.KeyboardMode.ON_DEMAND)
         GtkLayerShell.set_layer(widget, GtkLayerShell.Layer.OVERLAY)
-        self.menu.popup_at_pointer(event)
+        # Anchor the menu's top-left at the click so it (and its submenus) extend
+        # down and to the RIGHT, instead of GTK flipping them left.
+        win = widget.get_window()
+        rect = Gdk.Rectangle()
+        rect.x, rect.y, rect.width, rect.height = int(event.x), int(event.y), 1, 1
+        self.menu.popup_at_rect(win, rect,
+                                Gdk.Gravity.NORTH_WEST, Gdk.Gravity.NORTH_WEST, event)
         return True
 
     def on_menu_closed(self, _menu):
