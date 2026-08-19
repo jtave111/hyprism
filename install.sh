@@ -19,6 +19,7 @@ link "$REPO/bin/hyprism"        "$BIN/hyprism"
 link "$REPO/bin/set-wallpaper"  "$BIN/set-wallpaper"
 link "$REPO/bin/hyprism-menu"   "$BIN/hyprism-menu"
 link "$REPO/bin/hyprism-desktop" "$BIN/hyprism-desktop"
+link "$REPO/bin/hyprism-appmenu" "$BIN/hyprism-appmenu"
 # Backward-compatible alias (older configs / muscle memory call it hyprtheme).
 link "$REPO/bin/hyprism"        "$BIN/hyprtheme"
 
