@@ -26,7 +26,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 try:
     gi.require_version("GtkLayerShell", "0.1")
-    from gi.repository import Gtk, Gdk, GtkLayerShell, GLib
+    from gi.repository import Gtk, Gdk, GtkLayerShell, GLib, Gio
 except (ValueError, ImportError):
     sys.stderr.write("hyprism-desktop: gtk-layer-shell not available; exiting.\n")
     sys.exit(0)
@@ -140,6 +140,75 @@ def group_title(group):
 TERMINALS = ["kitty", "alacritty", "foot", "wezterm", "konsole", "gnome-terminal", "xterm", "st"]
 BROWSERS = ["firefox", "librewolf", "chromium", "google-chrome-stable", "brave",
             "brave-browser", "vivaldi-stable", "qutebrowser", "tor-browser", "epiphany"]
+
+
+# ---- native application menu (freedesktop .desktop categories) --------
+# Standard categories, in display order. An app is filed under every main
+# category it declares; apps with none go to "Other".
+MAIN_CATS = [
+    ("Office",       {"Office"}),
+    ("Internet",     {"Network"}),
+    ("Multimedia",   {"AudioVideo", "Audio", "Video"}),
+    ("Graphics",     {"Graphics"}),
+    ("Development",  {"Development"}),
+    ("Games",        {"Game"}),
+    ("Utilities",    {"Utility", "Accessories"}),
+    ("System",       {"System", "Settings"}),
+    ("Education",    {"Education", "Science"}),
+]
+
+
+def app_categories():
+    cats = {label: [] for label, _ in MAIN_CATS}
+    other = []
+    for app in Gio.AppInfo.get_all():
+        try:
+            if not app.should_show():
+                continue
+        except Exception:
+            continue
+        name = app.get_name() or ""
+        if not name:
+            continue
+        raw = getattr(app, "get_categories", lambda: None)() or ""
+        decl = {c for c in raw.rstrip(";").split(";") if c}
+        placed = False
+        for label, keys in MAIN_CATS:
+            if decl & keys:
+                cats[label].append((name, app))
+                placed = True
+        if not placed:
+            other.append((name, app))
+    for label in cats:
+        cats[label].sort(key=lambda x: x[0].lower())
+    other.sort(key=lambda x: x[0].lower())
+    return cats, other
+
+
+def launch_appinfo(app):
+    try:
+        app.launch(None, None)
+    except Exception as exc:
+        sys.stderr.write("hyprism-desktop: app launch failed: %s\n" % exc)
+
+
+def build_app_list(menu, items):
+    for name, app in items:
+        menu.append(leaf(name, lambda a=app: launch_appinfo(a)))
+    if not items:
+        menu.append(Gtk.MenuItem(label="(none)"))
+    menu.show_all()
+
+
+def build_applications(menu):
+    cats, other = app_categories()
+    for label, _ in MAIN_CATS:
+        items = cats[label]
+        if items:
+            menu.append(submenu(label, lambda m, its=items: build_app_list(m, its)))
+    if other:
+        menu.append(submenu("Other", lambda m: build_app_list(m, other)))
+    menu.show_all()
 
 
 # ---- palette + CSS ----------------------------------------------------
@@ -310,6 +379,7 @@ def build_root():
     if shutil.which("thunar"):
         root.append(leaf("Files", lambda: spawn(["thunar"])))
     root.append(Gtk.SeparatorMenuItem())
+    root.append(submenu("Applications", build_applications))
     root.append(submenu("BlackArch", build_blackarch))
     root.append(submenu("Hyprism", build_hyprism))
     root.append(Gtk.SeparatorMenuItem())
