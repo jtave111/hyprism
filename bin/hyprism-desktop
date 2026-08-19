@@ -261,8 +261,7 @@ menu, .menu {
 }
 menuitem {
   color: %(fg)s;
-  padding: 1px 14px 1px 7px;
-  min-height: 0;
+  padding: 2px 12px 2px 7px;
   border-left: 2px solid transparent;
   border-radius: 0;
 }
@@ -272,7 +271,14 @@ menuitem:hover, menuitem:selected {
   border-left: 2px solid %(accent_lit)s;
 }
 menuitem:hover label, menuitem:selected label { color: %(onacc)s; }
-menuitem arrow { color: %(accent_lit)s; min-height: 0; }
+/* the submenu indicator (►) at the end of the line — keep it visible */
+menuitem arrow {
+  color: %(accent_lit)s;
+  min-width: 14px;
+  margin-left: 10px;
+  -gtk-icon-transform: scale(1);
+}
+menuitem:hover arrow, menuitem:selected arrow { color: %(onacc)s; }
 separator { background-color: %(line)s; min-height: 1px; margin: 2px 0px; }
 """ % p).encode()
 
