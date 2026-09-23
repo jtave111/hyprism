@@ -242,7 +242,7 @@ detail(){
     janelas) echo 'Defina modo flutuante/tiling e comportamento de abertura.' ;;
     entrada) echo 'Configure mouse, touchpad, gestos, rolagem e sensibilidade.' ;;
     cursor) echo 'Escolha tema, tamanho e ocultação automática do cursor.' ;;
-    bloqueio) echo 'Personalize fundo, relógio, brilho e blur do bloqueio.' ;;
+    bloqueio) echo 'Fundo (wallpaper/imagem/cor), relógio (tamanho·cor·formato), moldura, avatar, mensagem, brilho e blur.' ;;
     notificacoes) echo 'Ajuste posição, largura, duração e ícones das notificações.' ;;
     fonte) echo 'Escolha família e tamanho da fonte com prévia.' ;;
     atalhos) echo 'Consulte os atalhos de teclado configurados.' ;;
@@ -354,7 +354,7 @@ quick_search(){
       $'hypr:janelas\tHyprland · Janelas\tLayout, encaixe, foco e tamanho inicial' \
       $'hypr:entrada\tHyprland · Entrada\tMouse, touchpad, teclado e gestos' \
       $'hypr:cursor\tHyprland · Cursor\tTema, tamanho e ocultação' \
-      $'hypr:bloqueio\tHyprland · Bloqueio\tFundo, blur, brilho e relógio' \
+      $'hypr:bloqueio\tHyprland · Bloqueio\tFundo, relógio, moldura, avatar, mensagem, brilho e blur' \
       $'hypr:notificacoes\tHyprland · Notificações\tPosição, tamanho, tempo e ícones' \
       $'hypr:fonte\tWaybar · Fonte\tFamília e tamanho' \
       $'hypr:atalhos\tHyprland · Atalhos\tLista de teclas configuradas' \
@@ -493,13 +493,17 @@ hypr_menu(){
       $'wallpaper\tWallpaper\tPrévia ao vivo com as setas' \
       $'bordas\tBordas das janelas\tCores ativa/inativa e intensidade' \
       $'aparencia\tGeometria\tEspessura, cantos e espaçamento' \
-      $'efeitos\tEfeitos\tBlur, sombra, opacidade e animações' \
+      $'efeitos\tEfeitos\tBlur, sombra, opacidade e foco' \
+      $'animacoes\tAnimações\tPresets de janelas, camadas e áreas de trabalho' \
       $'barra\tWaybar\tAltura, posição e aparência da barra' \
+      $'estilo\tEstilo da barra\tFlat, pills ou segmentada + margem, cantos e espaço' \
       $'modulos\tMódulos da Waybar\tEscolher cada indicador exibido' \
       $'janelas\tJanelas\tFlutuante, tiling e tamanho inicial' \
+      $'workspaces\tÁreas de trabalho\tQuantidade, regras, layout e navegação' \
       $'entrada\tMouse e touchpad\tGestos, rolagem, toque e sensibilidade' \
       $'cursor\tCursor do sistema\tTema, tamanho e ocultação' \
-      $'bloqueio\tTela de bloqueio\tFundo, blur, brilho, relógio e cursor' \
+      $'bloqueio\tTela de bloqueio\tFundo, relógio (tamanho·cor·formato), moldura, avatar, mensagem, brilho, blur e cursor' \
+      $'sddm\tTela de início (SDDM)\tEscolher o tema da tela de login — com miniatura, igual ao wallpaper' \
       $'notificacoes\tNotificações\tPosição, largura, tempo e ícones' \
       $'fonte\tFonte da barra\tFamília e tamanho' \
       $'atalhos\tAtalhos\tConsultar todas as teclas' \
@@ -510,10 +514,13 @@ hypr_menu(){
     case "$key" in
       paleta) run "$HYPR" paleta ;; wallpaper) run "$HYPR" wallpaper ;;
       bordas) run "$HYPR" bordas ;; aparencia) run "$HYPR" aparencia ;;
-      efeitos) run "$HYPR" efeitos ;; barra) run "$HYPR" barra ;;
+      efeitos) run "$HYPR" efeitos ;; animacoes) run "$HYPR" animacoes ;;
+      barra) run "$HYPR" barra ;; estilo) run "$HYPR" estilo ;;
       modulos) run "$HYPR" modulos ;; janelas) run "$HYPR" janelas ;;
+      workspaces) run "$HYPR" workspaces ;;
       entrada) run "$HYPR" entrada ;; cursor) run "$HYPR" cursor ;;
-      bloqueio) run "$HYPR" bloqueio ;; notificacoes) run "$HYPR" notificacoes ;;
+      bloqueio) run "$HYPR" bloqueio ;; sddm) run "$HYPR" sddm ;;
+      notificacoes) run "$HYPR" notificacoes ;;
       fonte) run "$HYPR" fonte ;;
       atalhos) run "$HYPR" atalhos ;; preset) run "$HYPR" preset ;;
       config) run "$HYPR" config ;; voltar) return 0 ;;
@@ -617,11 +624,27 @@ random_all(){
   sync_all
 }
 
+# Idioma da interface do Hyprism (menus, prompts e ajuda do hyprtheme).
+# Herdado da antiga tela "Hyprism · control center", agora dentro da central.
+lang_menu(){
+  local cur c key
+  cur=$(value "$HYPR_STATE" lang); [ -n "$cur" ] || cur='en'
+  c=$(pick 'Hyprism · Idioma / Language' 'idioma' \
+      "echo '  Idioma atual do Hyprism: $cur'; echo; echo '  PT — menus, prompts e ajuda em português'; echo '  EN — everything in English'" \
+      $'pt\tPortuguês  (PT)\tInterface do Hyprism em português' \
+      $'en\tEnglish  (EN)\tHyprism interface in English' \
+      $'voltar\t← Voltar\tRetornar ao Hyprism') || return 0
+  key="${c%%$'\t'*}"
+  case "$key" in
+    pt) run "$HYPR" lang pt ;; en) run "$HYPR" lang en ;; voltar) return 0 ;;
+  esac
+}
+
 main_menu(){
-  have fzf || { echo 'Instale o fzf para abrir a central visual.'; return 1; }
+  have fzf || { echo 'Instale o fzf para abrir o Hyprism.'; return 1; }
   while true; do
     local c key
-    c=$(pick 'CENTRAL VISUAL' 'configurar' "$SELF __preview {1}" \
+    c=$(pick 'Hyprism' 'hyprism' "$SELF __preview {1}" \
       $'buscar\tBuscar qualquer configuração\tPesquisa única em Hyprland, Rofi, Kitty e sistema' \
       $'hyprland\tHyprland e Waybar\tJanelas, wallpaper, bordas, efeitos e barra' \
       $'rofi\tRofi Launcher\tLayout, tamanho, posição, cores e ícones' \
@@ -630,14 +653,16 @@ main_menu(){
       $'backup\tGerenciar visual\tBackup, restauração, reaplicar e sincronizar' \
       $'sync\tSincronizar tudo\tUsar o tema global ativo do Hyprland em todo o desktop' \
       $'random\tVisual aleatório\tEscolher uma paleta e aplicar em tudo' \
+      $'idioma\tIdioma · Language\tAlternar a interface do Hyprism entre Português e Inglês (EN ⇄ PT)' \
       $'status\tResumo completo\tConferir todas as escolhas ativas' \
       $'doctor\tDiagnóstico\tVerificar dependências, arquivos e sintaxe' \
-      $'sair\tSair\tFechar a central visual') || break
+      $'sair\tSair\tFechar o Hyprism') || break
     key="${c%%$'\t'*}"
     case "$key" in
       buscar) quick_search ;; hyprland) hypr_menu ;; rofi) rofi_menu ;; kitty) kitty_menu ;;
       apps) apps_menu ;; backup) backup_menu ;;
       sync) sync_all ;; random) random_all ;;
+      idioma) lang_menu ;;
       status) status_all; printf '\n'; read -rp '  [enter] voltar ' _ ;;
       doctor) doctor_human; printf '\n'; read -rp '  [enter] voltar ' _ ;;
       sair) break ;;

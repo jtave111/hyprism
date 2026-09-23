@@ -575,6 +575,57 @@ load_pt(){ PT=(
   ['wrap']='circular'
   ['wrap transition']='transicao circular'
   ['wrong password']='senha incorreta'
+  # --- lock screen (tela de bloqueio) additions ---
+  ['of the background']='do fundo'
+  ['clock size']='tamanho do relogio'
+  ['clock color']='cor do relogio'
+  ['clock format']='formato do relogio'
+  ['accent frame']='moldura de acento'
+  ['avatar']='avatar'
+  ['message']='mensagem'
+  ['default hint']='dica padrao'
+  ['lock background']='fundo do bloqueio'
+  ['follow the wallpaper']='seguir o wallpaper'
+  ['a dedicated image']='uma imagem propria'
+  ['a solid color']='uma cor solida'
+  ['choose an image']='escolher uma imagem'
+  ['huge']='gigante'
+  ['24-hour']='24 horas'
+  ['12-hour (AM/PM)']='12 horas (AM/PM)'
+  ['show the accent frame']='mostrar a moldura'
+  ['no frame']='sem moldura'
+  ['show the avatar']='mostrar o avatar'
+  ['hide the avatar']='esconder o avatar'
+  ['Type a line for the bottom of the lock screen.']='Escreva uma linha pro rodape da tela de bloqueio.'
+  ['Leave empty for the default hint']='Deixe vazio para a dica padrao'
+  # --- password field (campo de senha) ---
+  ['password field']='campo de senha'
+  ['corner style']='estilo dos cantos'
+  ['position on screen']='posicao na tela'
+  ['pill (very round)']='pilula (bem redondo)'
+  ['square corners']='cantos retos'
+  ['narrow']='estreito'
+  ['very small']='bem pequeno'
+  ['higher']='mais alto'
+  ['centered']='centralizado'
+  ['lower']='mais baixo'
+  ['near the bottom']='perto do rodape'
+  ['none']='nenhuma'
+  # --- SDDM login theme (tela de inicio) ---
+  ['theme']='tema'
+  ['active now']='ativo agora'
+  ['about']='sobre'
+  ['no preview image']='sem imagem de previa'
+  ['inside kitty the image shows on its own; otherwise install chafa']='dentro do kitty a imagem aparece sozinha; fora dele, instale o chafa'
+  ['pkexec not found — cannot change the login theme']='pkexec ausente — nao da pra trocar o tema de login'
+  ['login theme']='tema de login'
+  ['takes effect at the next login']='vale no proximo login'
+  ['could not apply the login theme (password cancelled or failed)']='nao deu pra aplicar o tema (senha cancelada ou falhou)'
+  ['no SDDM themes installed']='nenhum tema SDDM instalado'
+  ['login screen (SDDM)']='tela de inicio (SDDM)'
+  ['arrows preview · ENTER apply (asks password) · ESC cancel']='setas previa · ENTER aplica (pede senha) · ESC cancela'
+  ['now']='agora'
+  ['login screen theme (SDDM), like picking a wallpaper']='tema da tela de login (SDDM), como escolher um wallpaper'
 ); }
 lang_init(){ LANGX=$(sget lang); case "$LANGX" in pt|en) ;; *) LANGX=en ;; esac
   [ "$LANGX" = pt ] && declare -F load_pt >/dev/null && load_pt; return 0; }
@@ -630,6 +681,10 @@ seed(){
   def cursor_hide_key nao; def cursor_timeout 0
   def lock_blur 3;      def lock_brightness 50
   def lock_clock sim;   def lock_hide_cursor sim
+  def lock_bg wallpaper; def lock_bg_image ""
+  def lock_clock_size 128; def lock_clock_color fg; def lock_clock_24h sim
+  def lock_frame nao;   def lock_avatar sim; def lock_message ""
+  def lock_field_style square; def lock_field_width 240; def lock_field_pos mid
   def notif_position top-right; def notif_width 360
   def notif_timeout 8;  def notif_icons sim
 
@@ -1033,19 +1088,86 @@ gen_hyprlock(){
   [ -f "$wall" ] || wall="$WALLDIR/gruvbox_forest-4.png"
   local a="${accent#\#}" b="${bg#\#}" f="${fg#\#}" d="${dim#\#}" s="${sel#\#}" l="${accent_lit#\#}"
   local bg2="${bg2#\#}" line="${line#\#}"
-  local brightness clock_labels datefmt lockfont
+  local brightness datefmt lockfont
   brightness=$(awk "BEGIN{printf \"%.2f\", $(sget lock_brightness)/100}")
-  [ "$LANGX" = pt ] && datefmt='%A, %d de %B' || datefmt='%A, %d %B'
+  # The lock screen follows the SYSTEM, which is English here — keep the date in
+  # English (weekday/month come from the system locale) regardless of the
+  # Hyprism menu language, matching the English "Password" prompt.
+  datefmt='%A, %B %d'
   lockfont=$(sget barfont)
-  clock_labels=""
+
+  # --- input field: position, width and corner style are all customizable.
+  #     The avatar/username follow the field so the cluster stays coherent
+  #     wherever you put it (and never collides with the clock/date above).
+  local base fieldw fieldround av_y un_y
+  case "$(sget lock_field_pos)" in
+    high) base=-150 ;; low) base=-230 ;; bottom) base=-285 ;; *) base=-185 ;;
+  esac
+  av_y=$((base+135)); un_y=$((base+65))
+  fieldw=$(sget lock_field_width)
+  case "$(sget lock_field_style)" in
+    square)  fieldround=6 ;;
+    rounded) fieldround=14 ;;
+    *)       fieldround=25 ;;
+  esac
+
+  # --- background: follow the wallpaper (default), a dedicated image, or a
+  #     solid palette color. Image falls back to the wallpaper if it vanished.
+  local bg_block src
+  case "$(sget lock_bg)" in
+    color)
+      bg_block=$(cat <<EOF
+background {
+    monitor =
+    color = rgba(${b}ff)
+}
+EOF
+) ;;
+    image)
+      src=$(sget lock_bg_image); [ -f "$src" ] || src="$wall"
+      bg_block=$(cat <<EOF
+background {
+    monitor =
+    path = $src
+    blur_passes = $(sget lock_blur)
+    blur_size = 7
+    brightness = $brightness
+    contrast = 0.9
+    vibrancy = 0.15
+}
+EOF
+) ;;
+    *)
+      bg_block=$(cat <<EOF
+background {
+    monitor =
+    path = $wall
+    blur_passes = $(sget lock_blur)
+    blur_size = 7
+    brightness = $brightness
+    contrast = 0.9
+    vibrancy = 0.15
+}
+EOF
+) ;;
+  esac
+
+  # --- clock: size, color (text/accent/light accent) and 24h/12h format ---
+  local clock_labels="" clockcol clockfmt
+  case "$(sget lock_clock_color)" in
+    accent)     clockcol="$a" ;;
+    accent_lit) clockcol="$l" ;;
+    *)          clockcol="$f" ;;
+  esac
+  [ "$(sget lock_clock_24h)" = "nao" ] && clockfmt='%I:%M %p' || clockfmt='%H:%M'
   if [ "$(sget lock_clock)" = "sim" ]; then
     clock_labels=$(cat <<EOF
 # big clock, high on the screen
 label {
     monitor =
-    text = cmd[update:1000] echo "\$(date +'%H:%M')"
-    color = rgba(${f}ff)
-    font_size = 128
+    text = cmd[update:1000] echo "\$(date +'$clockfmt')"
+    color = rgba(${clockcol}ff)
+    font_size = $(sget lock_clock_size)
     font_family = ${lockfont} Bold
     position = 0, 150
     halign = center
@@ -1068,69 +1190,94 @@ label {
 EOF
 )
   fi
+
+  # --- thin accent frame around the screen edges (optional) ---
+  local frame_block=""
+  if [ "$(sget lock_frame)" = "sim" ]; then
+    frame_block=$(cat <<EOF
+# thin accent frame hugging the screen edges (uses the lit accent so it stays
+# visible even when the base accent is near-black)
+shape {
+    monitor =
+    size = 100%, 100%
+    color = rgba(00000000)
+    border_size = 2
+    border_color = rgba(${l}66)
+    rounding = 0
+    position = 0, 0
+    halign = center
+    valign = center
+}
+EOF
+)
+  fi
+
+  # --- avatar puck + glyph above the field (optional) ---
+  local avatar_block=""
+  if [ "$(sget lock_avatar)" = "sim" ]; then
+    avatar_block=$(cat <<EOF
+# avatar puck above the field — a clean circle with a visible accent-lit ring
+shape {
+    monitor =
+    size = 96, 96
+    color = rgba(${bg2}ee)
+    border_size = 3
+    border_color = rgba(${l}ff)
+    rounding = -1
+    position = 0, $av_y
+    halign = center
+    valign = center
+    shadow_passes = 2
+    shadow_size = 6
+    shadow_color = rgba(00000099)
+}
+EOF
+)
+  fi
+
+  # --- bottom line: ONLY shown when you set a message. Empty = nothing at all
+  #     (no stray hint on the screen).
+  local msg_block="" msg; msg=$(sget lock_message)
+  if [ -n "$msg" ]; then
+    msg_block=$(cat <<EOF
+label {
+    monitor =
+    text = $msg
+    color = rgba(${l}ff)
+    font_size = 14
+    font_family = ${lockfont}
+    position = 0, 40
+    halign = center
+    valign = bottom
+}
+EOF
+)
+  fi
+
   cat > "$HD/hyprlock.conf" <<EOF
 # Generated by Hyprism — palette $1. Do not edit by hand.
-# A clean, centered lock: dimmed blurred wallpaper, a thin accent frame around
-# the whole screen, a large clock, an avatar dot, and a pill input field.
+# Customize it from Hyprism: 'hyprism bloqueio' (or the Lock screen menu).
+# A clean, centered lock: background, an optional accent frame, a clock, an
+# optional avatar, a pill input field and a bottom line.
 general {
     hide_cursor = $(yesno "$(sget lock_hide_cursor)")
     ignore_empty_input = true
     immediate_render = true
 }
 
-background {
-    monitor =
-    path = $wall
-    blur_passes = $(sget lock_blur)
-    blur_size = 7
-    brightness = $brightness
-    contrast = 0.9
-    vibrancy = 0.15
-}
+$bg_block
 
-# a soft dark veil so the foreground always reads, on any wallpaper
+# a soft dark veil so the foreground always reads, on any background
 background {
     monitor =
     color = rgba(0a0a0a55)
 }
 
-# thin accent frame hugging the screen edges
-shape {
-    monitor =
-    size = 100%, 100%
-    color = rgba(00000000)
-    border_size = 2
-    border_color = rgba(${a}cc)
-    rounding = 0
-    position = 0, 0
-    halign = center
-    valign = center
-}
+$frame_block
 
 $clock_labels
 
-# avatar puck above the field
-shape {
-    monitor =
-    size = 92, 92
-    color = rgba(${bg2}ee)
-    border_size = 2
-    border_color = rgba(${a}ff)
-    rounding = -1
-    position = 0, -90
-    halign = center
-    valign = center
-}
-label {
-    monitor =
-    text =
-    color = rgba(${l}ff)
-    font_size = 40
-    font_family = ${lockfont}
-    position = 0, -90
-    halign = center
-    valign = center
-}
+$avatar_block
 
 # username under the avatar
 label {
@@ -1139,45 +1286,39 @@ label {
     color = rgba(${f}ff)
     font_size = 15
     font_family = ${lockfont} Bold
-    position = 0, -168
+    position = 0, $un_y
     halign = center
     valign = center
 }
 
-# the input field: a rounded pill with an accent outline
+# the input field — a refined pill: soft glassy inner, a visible accent-lit
+# ring and a subtle drop shadow. Width/corners/position come from Hyprism.
 input-field {
     monitor =
-    size = 340, 52
+    size = $fieldw, 40
     outline_thickness = 2
-    dots_size = 0.26
-    dots_spacing = 0.3
+    dots_size = 0.25
+    dots_spacing = 0.32
     dots_center = true
     dots_rounding = -1
-    outer_color = rgba(${a}ff)
-    inner_color = rgba(${b}e6)
+    outer_color = rgba(${l}ff)
+    inner_color = rgba(${b}cc)
     font_color  = rgba(${f}ff)
     check_color = rgba(${l}ff)
     fail_color  = rgba(${s}ff)
     capslock_color = rgba(${l}ff)
-    rounding = 26
-    placeholder_text = <span foreground="#${d}"> $(t 'password')</span>
-    fail_text = <span foreground="#${f}"> $(t 'wrong password')</span>
-    position = 0, -250
+    rounding = $fieldround
+    shadow_passes = 2
+    shadow_size = 5
+    shadow_color = rgba(00000099)
+    placeholder_text = Password
+    fail_text = Wrong password
+    position = 0, $base
     halign = center
     valign = center
 }
 
-# small hint line at the very bottom
-label {
-    monitor =
-    text = <span foreground="#${d}">$(t 'type your password and press Enter')</span>
-    color = rgba(${d}ff)
-    font_size = 12
-    font_family = ${lockfont}
-    position = 0, 40
-    halign = center
-    valign = bottom
-}
+$msg_block
 EOF
 }
 
@@ -1552,6 +1693,102 @@ pick_wallpaper(){
   write_hyprpaper "$WALLDIR/$sel"
   render
   ok "$(t 'wallpaper'): $sel ($(t 'also on the lock screen'))"
+}
+
+# ---------- SDDM login theme (the system greeter / "tela de inicio") ----------
+# Pick an installed SDDM theme the SAME way you pick a wallpaper: a list with a
+# live thumbnail on the side. Applying writes the choice under /etc/sddm.conf.d
+# via pkexec (a graphical password prompt) — nothing here touches /etc without
+# your OK. The file is named to sort AFTER the KDE one, so our choice wins.
+SDDM_THEMES_DIR="/usr/share/sddm/themes"
+
+sddm_current(){
+  # Highest-precedence Current= across sddm.conf and sddm.conf.d/*.conf (later
+  # files win, so the last match is the effective one).
+  { grep -h '^Current=' /etc/sddm.conf 2>/dev/null
+    local f
+    for f in $(ls -1 /etc/sddm.conf.d/*.conf 2>/dev/null | sort); do
+      grep -h '^Current=' "$f" 2>/dev/null
+    done
+  } | tail -1 | cut -d= -f2- | tr -d '\r'
+}
+
+sddm_shot(){
+  # Best-effort screenshot/preview image for a theme dir.
+  # 1) the Screenshot= declared in metadata.desktop, 2) a file named like a
+  # preview, 3) as a last resort the biggest image in the theme (almost always
+  # the background/screenshot — this is what saves themes like astronaut whose
+  # background is just "blackarch.png").
+  local dir="$1" shot
+  shot=$(grep -m1 '^Screenshot=' "$dir/metadata.desktop" 2>/dev/null | cut -d= -f2- | tr -d '\r')
+  if [ -n "$shot" ] && [ -f "$dir/$shot" ]; then printf '%s' "$dir/$shot"; return; fi
+  shot=$(find "$dir" -maxdepth 3 -type f \
+    -iregex '.*\(preview\|screenshot\|screen\|thumbnail\|background\).*\.\(png\|jpg\|jpeg\|webp\)' \
+    2>/dev/null | head -1)
+  [ -n "$shot" ] && { printf '%s' "$shot"; return; }
+  find "$dir" -maxdepth 3 -type f -iregex '.*\.\(png\|jpg\|jpeg\|webp\)' -printf '%s\t%p\n' \
+    2>/dev/null | sort -rn | head -1 | cut -f2-
+}
+
+preview_sddm(){
+  local name="$1" dir="$SDDM_THEMES_DIR/$1" cur shot img thumbkey desc
+  cur=$(sddm_current)
+  printf '%-10s %s\n' "$(t 'theme')" "$name"
+  [ "$name" = "$cur" ] && printf '%-10s • %s\n' '' "$(t 'active now')"
+  desc=$(grep -m1 '^Description=' "$dir/metadata.desktop" 2>/dev/null | cut -d= -f2- | tr -d '\r')
+  [ -n "$desc" ] && printf '%-10s %s\n' "$(t 'about')" "$desc"
+  printf '\n'
+
+  shot=$(sddm_shot "$dir")
+  if [ -z "$shot" ] || [ ! -f "$shot" ]; then printf '(%s)\n' "$(t 'no preview image')"; return 0; fi
+
+  thumbkey="$THUMBS/sddm_$(printf '%s' "$name" | tr -c '[:alnum:]._-' '_').png"
+  img="$shot"
+  if have magick; then
+    mkdir -p "$THUMBS"
+    if [ ! -f "$thumbkey" ] || [ "$shot" -nt "$thumbkey" ]; then
+      magick "$shot" -auto-orient -resize '1200x1200>' "$thumbkey" >/dev/null 2>&1 && img="$thumbkey"
+    else img="$thumbkey"; fi
+  fi
+
+  local cols=${FZF_PREVIEW_COLUMNS:-44} rows=${FZF_PREVIEW_LINES:-24}
+  local left=${FZF_PREVIEW_LEFT:-0} top=${FZF_PREVIEW_TOP:-0}
+  local ih=$(( rows - 5 )); [ "$ih" -lt 4 ] && ih=4
+  if have kitten && [ -n "${KITTY_WINDOW_ID:-}" ]; then
+    kitten icat --clear --transfer-mode=memory --stdin=no --scale-up \
+      --place="${cols}x${ih}@${left}x$(( top + 4 ))" "$img" 2>/dev/null
+  elif have chafa; then
+    chafa --size="${cols}x${ih}" "$img" 2>/dev/null
+  else
+    printf '(%s)\n' "$(t 'inside kitty the image shows on its own; otherwise install chafa')"
+  fi
+}
+
+apply_sddm(){
+  local theme="$1" conf="/etc/sddm.conf.d/zz-hyprism.conf" tmp inst
+  inst=$(command -v install)
+  have pkexec && [ -n "$inst" ] || { err "$(t 'pkexec not found — cannot change the login theme')"; return 1; }
+  tmp=$(mktemp) || return 1
+  printf '# Generated by Hyprism.\n[Theme]\nCurrent=%s\n' "$theme" > "$tmp"
+  if pkexec "$inst" -Dm644 "$tmp" "$conf" 2>/dev/null; then
+    ok "$(t 'login theme'): $theme  ($(t 'takes effect at the next login'))"
+  else
+    err "$(t 'could not apply the login theme (password cancelled or failed)')"
+  fi
+  rm -f "$tmp"
+}
+
+pick_sddm(){
+  have fzf || { warn "$(t 'install fzf for the menu')"; return 1; }
+  [ -d "$SDDM_THEMES_DIR" ] || { err "$(t 'no SDDM themes installed')"; return 1; }
+  local sel cur; cur=$(sddm_current)
+  sel=$(ls -1 "$SDDM_THEMES_DIR" 2>/dev/null \
+      | FZF --prompt="$(t 'login screen (SDDM)') > " \
+        --preview "$SELF __sddmprev {}" \
+        --preview-window='right,58%,border-left' \
+        --header="$(t 'arrows preview · ENTER apply (asks password) · ESC cancel')  ·  $(t 'now'): ${cur:-?}")
+  [ -z "${sel:-}" ] && return 0
+  apply_sddm "$sel"
 }
 
 # ---------- border color ----------
@@ -2337,18 +2574,41 @@ pick_cursor(){
 }
 
 pick_bloqueio(){
-  local c v
+  local c v img msgnow sub
   while true; do
+    msgnow=$(sget lock_message)
+    [ -n "$msgnow" ] && msgnow="\"$msgnow\"" || msgnow="$(t 'none')"
     c=$( {
-      row brightness "$(t 'brightness') · $(sget lock_brightness)% $(t 'of the wallpaper')"
-      row blur       "$(t 'blur') · $(sget lock_blur) $(t 'passes')"
-      row clock      "$(t 'clock') · $(t 'show time and date') $(sget lock_clock)"
-      row cursor     "$(t 'cursor') · $(t 'hide on the locked screen') $(sget lock_hide_cursor)"
-      row test       "$(t 'test') · $(t 'open hyprlock now')"
-      row back       "$(t 'back')"
+      row background  "$(t 'background') · $(sget lock_bg)"
+      row brightness  "$(t 'brightness') · $(sget lock_brightness)% $(t 'of the background')"
+      row blur        "$(t 'blur') · $(sget lock_blur) $(t 'passes')"
+      row clock       "$(t 'clock') · $(t 'show time and date') $(sget lock_clock)"
+      row clock_size  "$(t 'clock size') · $(sget lock_clock_size)px"
+      row clock_color "$(t 'clock color') · $(sget lock_clock_color)"
+      row clock_fmt   "$(t 'clock format') · $([ "$(sget lock_clock_24h)" = nao ] && echo 12h || echo 24h)"
+      row frame       "$(t 'accent frame') · $(sget lock_frame)"
+      row avatar      "$(t 'avatar') · $(sget lock_avatar)"
+      row campo       "$(t 'password field') · $(sget lock_field_style), $(sget lock_field_width)px, $(sget lock_field_pos)"
+      row cursor      "$(t 'cursor') · $(t 'hide on the locked screen') $(sget lock_hide_cursor)"
+      row message     "$(t 'message') · $msgnow"
+      row test        "$(t 'test') · $(t 'open hyprlock now')"
+      row back        "$(t 'back')"
       } | FZFM --prompt="$(t 'lock screen') > " \
           --header="$(t 'customizes hyprlock without changing your password')" )
     case "$(mkey "$c")" in
+      background)
+        v=$( { row wallpaper "$(t 'follow the wallpaper')"; row image "$(t 'a dedicated image')"; row color "$(t 'a solid color')"; } | FZFM --prompt="$(t 'lock background') > ")
+        case "$(mkey "$v")" in
+          wallpaper) sset lock_bg wallpaper ;;
+          color)     sset lock_bg color ;;
+          image)
+            img=$(find "$WALLDIR" "$HOME/Pictures" "$HOME/Pictures/Screenshots" -maxdepth 1 -type f \
+                    \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \) 2>/dev/null \
+                  | sort -u | FZF --delimiter=/ --with-nth=-1 --prompt="$(t 'choose an image') > ")
+            [ -n "$img" ] && { sset lock_bg_image "$img"; sset lock_bg image; }
+            ;;
+        esac
+        ;;
       brightness)
         v=$(printf '%s\n' "25 $(t 'very dark')" "35 $(t 'dark')" "50 $(t 'balanced')" "65 $(t 'light')" "80 $(t 'very light')" "100 $(t 'original')" | FZF --prompt="$(t 'background brightness') > ")
         [ -n "${v:-}" ] && sset lock_brightness "${v%% *}"
@@ -2361,9 +2621,56 @@ pick_bloqueio(){
         v=$( { row sim "$(t 'show time and date')"; row nao "$(t 'user and password only')"; } | FZFM --prompt="$(t 'clock') > ")
         [ -n "${v:-}" ] && sset lock_clock "$(mkey "$v")"
         ;;
+      clock_size)
+        v=$(printf '%s\n' "96 $(t 'small')" "128 $(t 'medium')" "160 $(t 'large')" "200 $(t 'huge')" | FZF --prompt="$(t 'clock size') > ")
+        [ -n "${v:-}" ] && { sset lock_clock_size "${v%% *}"; sset lock_clock sim; }
+        ;;
+      clock_color)
+        v=$( { row fg "$(t 'text')"; row accent "$(t 'accent')"; row accent_lit "$(t 'light accent')"; } | FZFM --prompt="$(t 'clock color') > ")
+        [ -n "${v:-}" ] && { sset lock_clock_color "$(mkey "$v")"; sset lock_clock sim; }
+        ;;
+      clock_fmt)
+        v=$( { row sim "$(t '24-hour')"; row nao "$(t '12-hour (AM/PM)')"; } | FZFM --prompt="$(t 'clock format') > ")
+        [ -n "${v:-}" ] && { sset lock_clock_24h "$(mkey "$v")"; sset lock_clock sim; }
+        ;;
+      frame)
+        v=$( { row sim "$(t 'show the accent frame')"; row nao "$(t 'no frame')"; } | FZFM --prompt="$(t 'accent frame') > ")
+        [ -n "${v:-}" ] && sset lock_frame "$(mkey "$v")"
+        ;;
+      avatar)
+        v=$( { row sim "$(t 'show the avatar')"; row nao "$(t 'hide the avatar')"; } | FZFM --prompt="$(t 'avatar') > ")
+        [ -n "${v:-}" ] && sset lock_avatar "$(mkey "$v")"
+        ;;
+      campo)
+        sub=$( {
+          row style    "$(t 'corner style') · $(sget lock_field_style)"
+          row width    "$(t 'width') · $(sget lock_field_width)px"
+          row position "$(t 'position on screen') · $(sget lock_field_pos)"
+          row back     "$(t 'back')"
+          } | FZFM --prompt="$(t 'password field') > " )
+        case "$(mkey "$sub")" in
+          style)
+            v=$( { row pill "$(t 'pill (very round)')"; row rounded "$(t 'rounded')"; row square "$(t 'square corners')"; } | FZFM --prompt="$(t 'corner style') > ")
+            [ -n "${v:-}" ] && sset lock_field_style "$(mkey "$v")"
+            ;;
+          width)
+            v=$(printf '%s\n' "200 $(t 'very small')" "240 $(t 'small')" "280 $(t 'normal')" "340 $(t 'wide')" "420 $(t 'very wide')" | FZF --prompt="$(t 'width') > ")
+            [ -n "${v:-}" ] && sset lock_field_width "${v%% *}"
+            ;;
+          position)
+            v=$( { row high "$(t 'higher')"; row mid "$(t 'centered')"; row low "$(t 'lower')"; row bottom "$(t 'near the bottom')"; } | FZFM --prompt="$(t 'position on screen') > ")
+            [ -n "${v:-}" ] && sset lock_field_pos "$(mkey "$v")"
+            ;;
+        esac
+        ;;
       cursor)
         v=$( { row sim "$(t 'hide the cursor')"; row nao "$(t 'keep it visible')"; } | FZFM --prompt="$(t 'cursor on lock') > ")
         [ -n "${v:-}" ] && sset lock_hide_cursor "$(mkey "$v")"
+        ;;
+      message)
+        printf '\n  %s\n  %s: ' "$(t 'Type a line for the bottom of the lock screen.')" "$(t 'Leave empty for the default hint')"
+        IFS= read -r v || v=""
+        sset lock_message "$v"
         ;;
       test)
         render >/dev/null 2>&1
@@ -2748,27 +3055,14 @@ system_menu(){
   done
 }
 
-# ---------- the Hyprism center (SUPER+I) ----------
+# ---------- the Hyprism center ----------
+# The face of Hyprism is the unified visual center (visualconf): one screen for
+# Hyprland, Waybar, Rofi, Kitty, apps and system, with a live preview panel.
+# Running `hyprism`, `hyprism menu` or SUPER+I lands here — we just hand off to
+# it. Falls back to the full appearance menu if visualconf is not installed.
 center_menu(){
-  have fzf || { warn "$(t 'install fzf for the menu, or use: hyprism <palette>')"; return; }
-  while true; do
-    local c; c=$( {
-      row appearance "$(t 'palette, wallpaper, bar & style, cursor, effects…')"
-      row system     "$(t 'network, sound, bluetooth, displays')"
-      row keys       "$(t 'view keybindings')"
-      row lang       "$(t 'language')  ·  $(sget lang)"
-      row config     "$(t 'see everything active')"
-      row sync       "$(t 'propagate theme to Kitty and Rofi')"
-      row quit       "$(t 'quit')"
-      } | FZFM --prompt='hyprism > ' --height=70% \
-          --header="$(t 'Hyprism · control center')" )
-    case "$(mkey "$c")" in
-      appearance) main_menu ;;   system) system_menu ;;
-      keys) show_binds ;;        lang) pick_lang ;;
-      config) show_config ;;     sync) sync_global ;;
-      quit|"") break ;;
-    esac
-  done
+  if command -v visualconf >/dev/null 2>&1; then exec visualconf; fi
+  main_menu
 }
 
 main_menu(){
@@ -2789,6 +3083,7 @@ main_menu(){
       row input         "$(t 'keyboard, mouse, touchpad and gestures')"
       row cursor        "$(t 'theme, size and when to hide')"
       row lock          "$(t 'background, clock and cursor of hyprlock')"
+      row login         "$(t 'login screen theme (SDDM), like picking a wallpaper')"
       row notifications "$(t 'position, size, timeout and icons')"
       row font          "$(t 'family and size of the bar')"
       row lang          "$(t 'interface language (English / Portuguese)')"
@@ -2807,6 +3102,7 @@ main_menu(){
       modules) pick_modulos ;;       windows) pick_janelas ;;
       workspaces) pick_workspaces ;; input) pick_entrada ;;
       cursor) pick_cursor ;;         lock) pick_bloqueio ;;
+      login) pick_sddm ;;
       notifications) pick_notificacoes ;; font) pick_fonte ;;
       lang) pick_lang ;;             binds) show_binds ;;
       preset) pick_preset ;;         sync) sync_global ;;
@@ -2828,6 +3124,7 @@ lang_init
 case "${1:-}" in
   __prev)      preview "$2" ;;
   __wprev)     preview_wall "$2" ;;
+  __sddmprev)  preview_sddm "$2" ;;
   __bprev)     preview_border "$2" ;;
   __blive)     border_live "$2" "$(sget border_inactive)" ;;
   __brprev)    preview_bright "$2" ;;
@@ -2853,6 +3150,7 @@ case "${1:-}" in
   input|entrada|touchpad) pick_entrada ;;
   cursor|ponteiro)   pick_cursor ;;
   lock|bloqueio|hyprlock) pick_bloqueio ;;
+  sddm|login|greeter|tela-de-inicio) pick_sddm ;;
   notifications|notificacoes|notify|dunst) pick_notificacoes ;;
   menu|center|central|centro) center_menu ;;
   network|rede|net) net_module ;;

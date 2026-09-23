@@ -21,6 +21,9 @@ I_TELA=$''; I_COR=$''; I_SEG=$''; I_SIS=$''
 
 # Cada linha: "icone|rotulo|comando|tipo"   tipo = gui | term
 itens(){
+  # ---- Hyprism (a central visual: aparencia de tudo num lugar so) ----
+  have visualconf && echo "$I_COR|Hyprism|visualconf|term"
+
   # ---- rede ----
   echo "$I_WIFI|Wi-Fi: conectar, salvar, esquecer|wifi-menu|gui"
   have nm-connection-editor && \
@@ -43,9 +46,9 @@ itens(){
   have wdisplays && echo "$I_TELA|Telas (wdisplays)|wdisplays|gui"
 
   # ---- aparencia ----
-  if have visualconf; then
-    echo "$I_COR|Aparencia completa: Hyprland, Rofi e Kitty|visualconf|term"
-  else
+  # O Hyprism (visualconf) ja esta no topo do menu; aqui ficam apenas os
+  # configuradores avulsos, para quando o Hyprism nao estiver instalado.
+  if ! have visualconf; then
     have hyprtheme  && echo "$I_COR|Aparencia do Hyprland (hyprtheme)|hyprtheme|term"
     have rofitheme  && echo "$I_COR|Aparencia do launcher (rofitheme)|rofitheme|term"
     have kittytheme && echo "$I_COR|Aparencia do terminal (kittytheme)|kittytheme|term"
