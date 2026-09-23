@@ -27,6 +27,234 @@ WALLFILE="$HOME/.config/hypr/wallpaper"
 BACKUPS="$HOME/.config/visualconf/backups"
 mkdir -p "$BACKUPS"
 
+# English catalog: menu text is written in Portuguese; when Hyprism's
+# language is 'en' (hyprism lang en), pick() swaps it through this table.
+declare -A EN=(
+  ['APLICATIVOS E SISTEMA']='APPS AND SYSTEM'
+  ['Abas do terminal']='Terminal tabs'
+  ['Abrir uma demonstração real']='Open a real demo'
+  ['Alertas do terminal']='Terminal alerts'
+  ['Algoritmo, ordem, maiúsculas e tokens']='Algorithm, order, case and tokens'
+  ['Algoritmo, ordenação e tokens']='Algorithm, sorting and tokens'
+  ['Alternar a interface do Hyprism entre Português e Inglês (EN ⇄ PT)']='Switch the Hyprism interface between Portuguese and English (EN ⇄ PT)'
+  ['Altura, posição e aparência da barra']='Bar height, position and look'
+  ['Animações']=Animations
+  ['Aplicar a paleta do Hyprland em todo o desktop']='Apply the Hyprland palette to the whole desktop'
+  ['Aplicativos e sistema']='Apps and system'
+  ['Aplicação ao vivo no terminal']='Live apply in the terminal'
+  [Atalhos]=Keybindings
+  ['BUSCA RÁPIDA']='QUICK SEARCH'
+  ['Backup, restauração, reaplicar e sincronizar']='Backup, restore, reapply and sync'
+  [Bluetooth]=Bluetooth
+  ['Blur, sombra e opacidade']='Blur, shadow and opacity'
+  ['Blur, sombra, opacidade e foco']='Blur, shadow, opacity and focus'
+  ['Borda e arredondamento']='Border and rounding'
+  ['Borda, cantos e espaçamento']='Border, corners and spacing'
+  ['Bordas das janelas']='Window borders'
+  ['Busca e formato dos resultados']='Search and result format'
+  ['Busca e ordenação']='Search and sorting'
+  ['Buscar qualquer configuração']='Search any setting'
+  ['Comportamento avançado']='Advanced behavior'
+  ['Conexões de rede']='Network connections'
+  ['Conferir todas as escolhas ativas']='Review every active choice'
+  ['Consultar todas as teclas']='Look up every key'
+  ['Cores ativa e inativa']='Active and inactive colors'
+  ['Cores ativa/inativa e intensidade']='Active/inactive colors and intensity'
+  ['Cores compartilhadas']='Shared colors'
+  ['Cores de todo o desktop']='Colors for the whole desktop'
+  ['Cores do terminal']='Terminal colors'
+  ['Cores, transparência e prompt']='Colors, transparency and prompt'
+  ['Cores, transparência e prompt combinados']='Colors, transparency and prompt combined'
+  ['Cores, ícones, fonte e cursor pelo nwg-look']='Colors, icons, font and cursor via nwg-look'
+  ['Criar backup agora']='Create a backup now'
+  ['Cursor do sistema']='System cursor'
+  ['Cursor do terminal']='Terminal cursor'
+  ['Densidade, colunas, gaps e ícones']='Density, columns, gaps and icons'
+  ['Densidade, colunas, gaps, ícones e scrollbar']='Density, columns, gaps, icons and scrollbar'
+  ['Dependências e sintaxe']='Dependencies and syntax'
+  ['Diagnóstico']=Diagnostics
+  ['Dispositivos, pareamento e conexões']='Devices, pairing and connections'
+  [Efeitos]=Effects
+  ['Escolher cada indicador exibido']='Pick each indicator shown'
+  ['Escolher e sincronizar uma paleta aleatória']='Pick and sync a random palette'
+  ['Escolher o tema da tela de login — com miniatura, igual ao wallpaper']='Pick the login screen theme — with thumbnails, like the wallpaper'
+  ['Escolher uma paleta e aplicar em tudo']='Pick a palette and apply it everywhere'
+  ['Espaço, caches, órfãos e restos do KDE (somente leitura)']='Disk space, caches, orphans and KDE leftovers (read-only)'
+  ['Espaço, órfãos, KDE e caches sem remover']='Space, orphans, KDE and caches, without removing'
+  ['Espessura, cantos e espaçamento']='Thickness, corners and spacing'
+  ['Estilo da barra']='Bar style'
+  ['Estilo, cores, fonte e ícones']='Style, colors, font and icons'
+  ['Estilo, cores, fonte e ícones pelo qt6ct']='Style, colors, font and icons via qt6ct'
+  ['Família e tamanho']='Family and size'
+  ['Família e tamanho com amostra']='Family and size with a sample'
+  ['Família e tamanho da fonte']='Font family and size'
+  ['Fechar o Hyprism']='Close Hyprism'
+  ['Fish, Bash ou Zsh']='Fish, Bash or Zsh'
+  ['Flat, pills ou segmentada + margem, cantos e espaço']='Flat, pills or segmented + margin, corners and gap'
+  ['Flutuante, tiling e tamanho inicial']='Floating, tiling and initial size'
+  ['Fonte da barra']='Bar font'
+  ['Fonte do terminal']='Terminal font'
+  ['Forma, piscar e espessura']='Shape, blink and thickness'
+  ['Fundo do Kitty']='Kitty background'
+  ['Fundo, relógio (tamanho·cor·formato), moldura, avatar, mensagem, brilho, blur e cursor']='Background, clock (size·color·format), frame, avatar, message, brightness, blur and cursor'
+  ['Fundo, relógio, moldura, avatar, mensagem, brilho e blur']='Background, clock, frame, avatar, message, brightness and blur'
+  ['GERENCIAR VISUAL']='MANAGE LOOK'
+  ['GTK, Qt, rede, áudio, Bluetooth e processos']='GTK, Qt, network, audio, Bluetooth and processes'
+  [Geometria]=Geometry
+  ['Gerenciar visual']='Manage look'
+  ['Gestos, rolagem, toque e sensibilidade']='Gestures, scrolling, tap and sensitivity'
+  ['Global · Diagnóstico']='Global · Diagnostics'
+  ['Global · Resumo']='Global · Summary'
+  ['Global · Sincronizar']='Global · Sync'
+  ['Grade e conteúdo']='Grid and content'
+  ['Guarda Hyprland, Waybar, Rofi, Kitty e prompt']='Saves Hyprland, Waybar, Rofi, Kitty and prompt'
+  ['Histórico e mouse']='History and mouse'
+  ['Hyprism · Idioma / Language']='Hyprism · Language / Idioma'
+  ['Hyprland e Waybar']='Hyprland and Waybar'
+  ['Hyprland · Atalhos']='Hyprland · Keybindings'
+  ['Hyprland · Bloqueio']='Hyprland · Lock screen'
+  ['Hyprland · Bordas']='Hyprland · Borders'
+  ['Hyprland · Efeitos']='Hyprland · Effects'
+  ['Hyprland · Entrada']='Hyprland · Input'
+  ['Hyprland · Geometria']='Hyprland · Geometry'
+  ['Hyprland · Janelas']='Hyprland · Windows'
+  ['Hyprland · Notificações']='Hyprland · Notifications'
+  ['Hyprland · Paleta global']='Hyprland · Global palette'
+  ['Hyprland → todos os componentes']='Hyprland → every component'
+  ['Hyprland, Waybar, bloqueio e notificações']='Hyprland, Waybar, lock screen and notifications'
+  ['Idioma · Language']='Language · Idioma'
+  ['Indicadores exibidos na barra']='Indicators shown on the bar'
+  ['Interação']=Interaction
+  ['Interface do Hyprism em português']='Hyprism interface in Portuguese'
+  ['Janela do Kitty']='Kitty window'
+  ['Janela e posição']='Window and position'
+  [Janelas]=Windows
+  ['Janelas, wallpaper, bordas, efeitos e barra']='Windows, wallpaper, borders, effects and bar'
+  ['Kitty e Shell']='Kitty and Shell'
+  ['Kitty · Abas']='Kitty · Tabs'
+  ['Kitty · Alertas']='Kitty · Alerts'
+  ['Kitty · Comportamento']='Kitty · Behavior'
+  ['Kitty · Fonte']='Kitty · Font'
+  ['Kitty · Histórico']='Kitty · History'
+  ['Kitty · Janela']='Kitty · Window'
+  ['Kitty · Perfis']='Kitty · Profiles'
+  ['Kitty · Tema']='Kitty · Theme'
+  ['Kitty · Transparência']='Kitty · Transparency'
+  ['Layout, encaixe, foco e tamanho inicial']='Layout, snapping, focus and initial size'
+  ['Layout, tamanho, posição, cores e ícones']='Layout, size, position, colors and icons'
+  ['Links, foco e integração']='Links, focus and integration'
+  ['Links, foco, integração e fechamento']='Links, focus, integration and closing'
+  ['Lista de teclas configuradas']='List of configured keys'
+  ['Minimal ou Spotlight']='Minimal or Spotlight'
+  ['Modelos Starship']='Starship presets'
+  ['Modelos Starship com prévia real']='Starship presets with a real preview'
+  [Moldura]=Frame
+  ['Monitor do sistema']='System monitor'
+  ['Mostrar a configuração ativa']='Show the active configuration'
+  ['Mostrar toda a configuração ativa']='Show the whole active configuration'
+  ['Mouse e touchpad']='Mouse and touchpad'
+  ['Mouse, touchpad, teclado e gestos']='Mouse, touchpad, keyboard and gestures'
+  ['Módulos da Waybar']='Waybar modules'
+  ['Navegação circular, mouse e clique externo']='Wrap-around navigation, mouse and outside click'
+  ['Notificações']=Notifications
+  ['Opacidade da janela']='Window opacity'
+  ['Opacidade e blur']='Opacity and blur'
+  ['Padding, tamanho e decoração']='Padding, size and decoration'
+  ['Padding, tamanho, decoração e memória']='Padding, size, decoration and memory'
+  ['Paleta de cores']='Color palette'
+  ['Pareamento e conexões']='Pairing and connections'
+  ['Perfis completos']='Complete profiles'
+  ['Pesquisa única em Hyprland, Rofi, Kitty e sistema']='One search across Hyprland, Rofi, Kitty and system'
+  ['Posição, estilo e títulos']='Position, style and titles'
+  ['Posição, estilo, alinhamento e títulos']='Position, style, alignment and titles'
+  ['Posição, largura, tempo e ícones']='Position, width, timeout and icons'
+  ['Posição, tamanho e fonte']='Position, size and font'
+  ['Posição, tamanho, tempo e ícones']='Position, size, timeout and icons'
+  ['Presets de janelas, camadas e áreas de trabalho']='Presets for windows, layers and workspaces'
+  ['Processos, memória, CPU e discos no btop']='Processes, memory, CPU and disks in btop'
+  ['Prompt e resultados']='Prompt and results'
+  ['Prévia ao vivo com as setas']='Live preview with the arrow keys'
+  ['Prévia ao vivo e tela de bloqueio']='Live preview and lock screen'
+  ['Quantidade, regras, layout e navegação']='Count, rules, layout and navigation'
+  ['Reaplicar configuração']='Reapply configuration'
+  ['Regenerar e recarregar todos os componentes']='Regenerate and reload every component'
+  ['Restaurar backup']='Restore a backup'
+  ['Resumo atual']='Current summary'
+  ['Resumo completo']='Full summary'
+  ['Retornar ao Hyprism']='Back to Hyprism'
+  ['Retornar à central']='Back to the center'
+  ['Rofi · Busca']='Rofi · Search'
+  ['Rofi · Grade']='Rofi · Grid'
+  ['Rofi · Interação']='Rofi · Interaction'
+  ['Rofi · Janela']='Rofi · Window'
+  ['Rofi · Moldura']='Rofi · Frame'
+  ['Rofi · Opacidade']='Rofi · Opacity'
+  ['Rofi · Paleta']='Rofi · Palette'
+  ['Rofi · Tipografia']='Rofi · Typography'
+  [Sair]=Quit
+  ['Salvar ou carregar combinações']='Save or load combinations'
+  ['Salvar ou restaurar o visual completo']='Save or restore the whole look'
+  ['Scanner do sistema']='System scanner'
+  ['Scrollback, rolagem e mouse']='Scrollback, scrolling and mouse'
+  ['Scrollback, rolagem, seleção e ocultação']='Scrollback, scrolling, selection and hiding'
+  ['Shell padrão']='Default shell'
+  ['Sincronizar tema global']='Sync global theme'
+  ['Sincronizar tudo']='Sync everything'
+  ['Sistema · Bluetooth']='System · Bluetooth'
+  ['Sistema · GTK']='System · GTK'
+  ['Sistema · Qt']='System · Qt'
+  ['Sistema · Rede']='System · Network'
+  ['Sistema · Scanner']='System · Scanner'
+  ['Sistema · Áudio']='System · Audio'
+  ['Som, flash e atenção']='Sound, flash and attention'
+  ['Som, flash visual e pedido de atenção']='Sound, visual flash and attention request'
+  ['Tamanho, linhas e nove posições na tela']='Size, lines and nine screen positions'
+  ['Tamanho, linhas e posição']='Size, lines and position'
+  ['Teclado, mouse e clique externo']='Keyboard, mouse and outside click'
+  ['Tela de bloqueio']='Lock screen'
+  ['Tela de início (SDDM)']='Login screen (SDDM)'
+  ['Tema de cores']='Color theme'
+  ['Tema dos aplicativos GTK']='GTK app theme'
+  ['Tema dos aplicativos Qt']='Qt app theme'
+  ['Tema, tamanho e ocultação']='Theme, size and hiding'
+  ['Tema, ícones, fonte e cursor']='Theme, icons, font and cursor'
+  ['Terminal, fontes, transparência, shell e prompt']='Terminal, fonts, transparency, shell and prompt'
+  ['Testar launcher']='Test the launcher'
+  ['Texto de busca e formato dos aplicativos']='Search text and app format'
+  [Tipografia]=Typography
+  ['Todos os valores ativos']='Every active value'
+  ['Transparência']=Transparency
+  ['Transparência da janela']='Window transparency'
+  ['Transparência e blur']='Transparency and blur'
+  ['Usa as mesmas famílias do Kitty']='Uses the same families as Kitty'
+  ['Usar o tema global ativo do Hyprland em todo o desktop']='Use the active global Hyprland theme on the whole desktop'
+  ['Verificar dependências, arquivos e sintaxe']='Check dependencies, files and syntax'
+  ['Visual aleatório']='Random look'
+  ['Voltar para um visual salvo anteriormente']='Go back to a previously saved look'
+  ['Volumes, entradas e saídas']='Volumes, inputs and outputs'
+  ['Volumes, microfones, saídas e perfis']='Volumes, microphones, outputs and profiles'
+  ['Waybar · Aparência']='Waybar · Appearance'
+  ['Waybar · Fonte']='Waybar · Font'
+  ['Waybar · Módulos']='Waybar · Modules'
+  ['Wi-Fi, VPN, DNS e IP']='Wi-Fi, VPN, DNS and IP'
+  ['Wi-Fi, VPN, IP fixo, DNS e rotas']='Wi-Fi, VPN, static IP, DNS and routes'
+  [buscar]=search
+  ['buscar configuração']='search settings'
+  ['detalhes e estado']='details and state'
+  [idioma]=language
+  ['opções']=options
+  [sistema]=system
+  ['Áreas de trabalho']=Workspaces
+  ['Áudio']=Audio
+  ['← Voltar']='← Back'
+  ['↑↓ navegar  ·  ENTER abrir  ·  ESC voltar  ·  digite para buscar']='↑↓ navigate  ·  ENTER open  ·  ESC back  ·  type to search'
+)
+
+# Follows Hyprism's language ('hyprism lang en|pt'). Portuguese is the source.
+LANGX=$(grep -m1 '^lang=' "$HYPR_STATE" 2>/dev/null | cut -d= -f2-)
+[ "$LANGX" = en ] || LANGX=pt
+tr_(){ if [ "$LANGX" = en ] && [ -n "${EN[$1]+x}" ]; then printf '%s' "${EN[$1]}"; else printf '%s' "$1"; fi; }
+
 have(){ command -v "$1" >/dev/null 2>&1; }
 value(){ grep -m1 "^$2=" "$1" 2>/dev/null | cut -d= -f2-; }
 active(){ cat "$1" 2>/dev/null || printf '-'; }
@@ -44,16 +272,21 @@ fzf_ui(){
 }
 
 pick(){
-  local title="$1" prompt="$2" preview="$3"
+  local title prompt preview it k l d
+  title=$(tr_ "$1"); prompt=$(tr_ "$2"); preview="$3"
   shift 3
-  printf '%s\n' "$@" | fzf_ui \
+  # The KEY (field 1) is never translated: callers route on it.
+  for it in "$@"; do
+    IFS=$'\t' read -r k l d <<<"$it"
+    printf '%s\t%s\t%s\n' "$k" "$(tr_ "$l")" "$(tr_ "${d:-}")"
+  done | fzf_ui \
       --delimiter=$'\t' --with-nth=2 \
       --prompt="  $prompt › " \
       --border-label="  $title  " --border-label-pos=2 \
-      --list-label='  opções  ' --input-label='  buscar  ' \
-      --header='↑↓ navegar  ·  ENTER abrir  ·  ESC voltar  ·  digite para buscar' \
+      --list-label="  $(tr_ 'opções')  " --input-label="  $(tr_ 'buscar')  " \
+      --header="$(tr_ '↑↓ navegar  ·  ENTER abrir  ·  ESC voltar  ·  digite para buscar')" \
       --preview="$preview" --preview-window='right,47%,border-rounded' \
-      --preview-label='  detalhes e estado  '
+      --preview-label="  $(tr_ 'detalhes e estado')  "
 }
 
 status_hypr(){

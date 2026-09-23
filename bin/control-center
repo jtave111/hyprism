@@ -13,6 +13,11 @@
 set -u
 
 have(){ command -v "$1" >/dev/null 2>&1; }
+
+# Segue o idioma do Hyprism ('hyprism lang en|pt').
+LANGX=$(grep -m1 '^lang=' "$HOME/.config/hypr/themes/.state" 2>/dev/null | cut -d= -f2-)
+[ "$LANGX" = en ] || LANGX=pt
+L(){ [ "$LANGX" = en ] && printf '%s' "$2" || printf '%s' "$1"; }   # L "pt" "en"
 term(){ setsid kitty -e "$@" >/dev/null 2>&1 < /dev/null & }
 gui(){  setsid "$@" >/dev/null 2>&1 < /dev/null & }
 
@@ -25,53 +30,53 @@ itens(){
   have visualconf && echo "$I_COR|Hyprism|visualconf|term"
 
   # ---- rede ----
-  echo "$I_WIFI|Wi-Fi: conectar, salvar, esquecer|wifi-menu|gui"
+  echo "$I_WIFI|$(L "Wi-Fi: conectar, salvar, esquecer" "Wi-Fi: connect, save, forget")|wifi-menu|gui"
   have nm-connection-editor && \
-    echo "$I_NET|Rede: VPN, 802.1X, IP fixo, rotas|nm-connection-editor|gui"
-  have nmtui && echo "$I_NET|Rede no terminal (nmtui)|nmtui|term"
-  have wavemon && echo "$I_WIFI|Monitor de sinal Wi-Fi (wavemon)|wavemon|term"
+    echo "$I_NET|$(L "Rede: VPN, 802.1X, IP fixo, rotas" "Network: VPN, 802.1X, static IP, routes")|nm-connection-editor|gui"
+  have nmtui && echo "$I_NET|$(L "Rede no terminal (nmtui)" "Network in the terminal (nmtui)")|nmtui|term"
+  have wavemon && echo "$I_WIFI|$(L "Monitor de sinal Wi-Fi (wavemon)" "Wi-Fi signal monitor (wavemon)")|wavemon|term"
 
   # ---- som ----
-  have pavucontrol && echo "$I_SOM|Som: volume, entradas e saidas|pavucontrol|gui"
-  have wiremix && echo "$I_SOM|Som no terminal (wiremix)|wiremix|term"
+  have pavucontrol && echo "$I_SOM|$(L "Som: volume, entradas e saidas" "Sound: volume, inputs and outputs")|pavucontrol|gui"
+  have wiremix && echo "$I_SOM|$(L "Som no terminal (wiremix)" "Sound in the terminal (wiremix)")|wiremix|term"
 
   # ---- bluetooth ----
   have blueman-manager && echo "$I_BT|Bluetooth|blueman-manager|gui"
-  have bluetuith && echo "$I_BT|Bluetooth no terminal|bluetuith|term"
+  have bluetuith && echo "$I_BT|$(L "Bluetooth no terminal" "Bluetooth in the terminal")|bluetuith|term"
   { ! have blueman-manager && have bluetoothctl; } && \
     echo "$I_BT|Bluetooth (bluetoothctl)|bluetoothctl|term"
 
   # ---- telas ----
-  have nwg-displays && echo "$I_TELA|Telas: posicao e resolucao|nwg-displays|gui"
-  have wdisplays && echo "$I_TELA|Telas (wdisplays)|wdisplays|gui"
+  have nwg-displays && echo "$I_TELA|$(L "Telas: posicao e resolucao" "Displays: position and resolution")|nwg-displays|gui"
+  have wdisplays && echo "$I_TELA|$(L "Telas (wdisplays)" "Displays (wdisplays)")|wdisplays|gui"
 
   # ---- aparencia ----
   # O Hyprism (visualconf) ja esta no topo do menu; aqui ficam apenas os
   # configuradores avulsos, para quando o Hyprism nao estiver instalado.
   if ! have visualconf; then
-    have hyprtheme  && echo "$I_COR|Aparencia do Hyprland (hyprtheme)|hyprtheme|term"
-    have rofitheme  && echo "$I_COR|Aparencia do launcher (rofitheme)|rofitheme|term"
-    have kittytheme && echo "$I_COR|Aparencia do terminal (kittytheme)|kittytheme|term"
+    have hyprtheme  && echo "$I_COR|$(L "Aparencia do Hyprland (hyprtheme)" "Hyprland appearance (hyprtheme)")|hyprtheme|term"
+    have rofitheme  && echo "$I_COR|$(L "Aparencia do launcher (rofitheme)" "Launcher appearance (rofitheme)")|rofitheme|term"
+    have kittytheme && echo "$I_COR|$(L "Aparencia do terminal (kittytheme)" "Terminal appearance (kittytheme)")|kittytheme|term"
   fi
-  have qt6ct      && echo "$I_COR|Tema dos aplicativos Qt (qt6ct)|qt6ct|gui"
-  have nwg-look   && echo "$I_COR|Tema dos aplicativos GTK (nwg-look)|nwg-look|gui"
+  have qt6ct      && echo "$I_COR|$(L "Tema dos aplicativos Qt (qt6ct)" "Qt app theme (qt6ct)")|qt6ct|gui"
+  have nwg-look   && echo "$I_COR|$(L "Tema dos aplicativos GTK (nwg-look)" "GTK app theme (nwg-look)")|nwg-look|gui"
 
   # ---- rede e seguranca ----
-  have wireshark  && echo "$I_SEG|Wireshark: captura de pacotes|wireshark|gui"
-  have etherape   && echo "$I_SEG|EtherApe: trafego ao vivo|etherape|gui"
-  have termshark  && echo "$I_SEG|Termshark (wireshark no terminal)|termshark|term"
-  have kismet     && echo "$I_SEG|Kismet: varredura de Wi-Fi|kismet|term"
-  have zaproxy    && echo "$I_SEG|OWASP ZAP: seguranca web|zaproxy|gui"
+  have wireshark  && echo "$I_SEG|$(L "Wireshark: captura de pacotes" "Wireshark: packet capture")|wireshark|gui"
+  have etherape   && echo "$I_SEG|$(L "EtherApe: trafego ao vivo" "EtherApe: live traffic")|etherape|gui"
+  have termshark  && echo "$I_SEG|$(L "Termshark (wireshark no terminal)" "Termshark (wireshark in the terminal)")|termshark|term"
+  have kismet     && echo "$I_SEG|$(L "Kismet: varredura de Wi-Fi" "Kismet: Wi-Fi scanning")|kismet|term"
+  have zaproxy    && echo "$I_SEG|$(L "OWASP ZAP: seguranca web" "OWASP ZAP: web security")|zaproxy|gui"
   have burpsuite  && echo "$I_SEG|Burp Suite|burpsuite|gui"
-  have bandwhich  && echo "$I_SEG|Banda por processo (bandwhich)|sudo bandwhich|term"
-  have iftop      && echo "$I_SEG|Trafego por conexao (iftop)|sudo iftop|term"
-  have nethogs    && echo "$I_SEG|Trafego por processo (nethogs)|sudo nethogs|term"
-  have gping      && echo "$I_SEG|Ping com grafico (gping)|gping 1.1.1.1|term"
-  have mtr        && echo "$I_SEG|Rota ate um destino (mtr)|mtr 1.1.1.1|term"
+  have bandwhich  && echo "$I_SEG|$(L "Banda por processo (bandwhich)" "Bandwidth per process (bandwhich)")|sudo bandwhich|term"
+  have iftop      && echo "$I_SEG|$(L "Trafego por conexao (iftop)" "Traffic per connection (iftop)")|sudo iftop|term"
+  have nethogs    && echo "$I_SEG|$(L "Trafego por processo (nethogs)" "Traffic per process (nethogs)")|sudo nethogs|term"
+  have gping      && echo "$I_SEG|$(L "Ping com grafico (gping)" "Ping with a graph (gping)")|gping 1.1.1.1|term"
+  have mtr        && echo "$I_SEG|$(L "Rota ate um destino (mtr)" "Route to a host (mtr)")|mtr 1.1.1.1|term"
 
   # ---- sistema ----
-  have btop      && echo "$I_SIS|Monitor do sistema (btop)|btop|term"
-  have hyprlock  && echo "$I_SIS|Bloquear a tela|hyprlock|gui"
+  have btop      && echo "$I_SIS|$(L "Monitor do sistema (btop)" "System monitor (btop)")|btop|term"
+  have hyprlock  && echo "$I_SIS|$(L "Bloquear a tela" "Lock the screen")|hyprlock|gui"
 }
 
 main(){
@@ -83,7 +88,7 @@ main(){
     tipo+=("$t")
   done < <(itens)
 
-  [ "${#rot[@]}" -eq 0 ] && { echo "nada instalado para mostrar"; exit 1; }
+  [ "${#rot[@]}" -eq 0 ] && { echo "$(L "nada instalado para mostrar" "nothing installed to show")"; exit 1; }
 
   local i
   i=$(printf '%s\n' "${rot[@]}" | rofi -dmenu -i -no-custom -format i -p "Hyprism")
