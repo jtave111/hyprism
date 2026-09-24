@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# =====================================================================
+#  hyprism-power — session menu (lock, log out, suspend, reboot, power off)
+#
+#  Opened by the power button on the bar and by SUPER + ESCAPE. Uses rofi
+#  when available (falls back to fzf in a terminal). Reboot and power off
+#  ask for a second confirmation. Follows the Hyprism language (en|pt).
+#
+#  hyprism-power                 open the menu
+#  hyprism-power lock|logout|suspend|reboot|poweroff
+# =====================================================================
+set -u
+
+have(){ command -v "$1" >/dev/null 2>&1; }
+LANGX=$(grep -m1 '^lang=' "$HOME/.config/hypr/themes/.state" 2>/dev/null | cut -d= -f2-)
+[ "$LANGX" = pt ] || LANGX=en
+L(){ [ "$LANGX" = pt ] && printf '%s' "$1" || printf '%s' "$2"; }   # L "pt" "en"
+
+do_action(){
+  case "$1" in
+    # hypridle turns lock-session into hyprlock; without hypridle, start hyprlock directly
+    lock)     if pidof hypridle >/dev/null; then loginctl lock-session
+              elif have hyprlock; then pidof hyprlock >/dev/null || setsid hyprlock >/dev/null 2>&1 &
+              fi ;;
+    logout)   hyprctl dispatch 'hl.dsp.exit()' >/dev/null 2>&1 ;;   # Lua dispatcher (Hyprland 0.56+ Lua config)
+    suspend)  systemctl suspend ;;   # hypridle's before_sleep_cmd locks first
+    reboot)   systemctl reboot ;;
+    poweroff) systemctl poweroff ;;
+    *) printf '%s: %s\n' "$(L 'ação desconhecida' 'unknown action')" "$1" >&2; return 2 ;;
+  esac
+}
+
+# menu MSG line...  prints the chosen index (0-based) or nothing
+menu(){
+  local prompt="$1"; shift
+  if have rofi; then
+    printf '%s\n' "$@" | rofi -dmenu -i -no-custom -format i -p "$prompt" 2>/dev/null
+  elif have fzf; then
+    local i=0 line
+    for line in "$@"; do printf '%s\t%s\n' "$i" "$line"; i=$((i+1)); done \
+      | fzf --delimiter=$'\t' --with-nth=2 --prompt="$prompt > " --height=40% --layout=reverse | cut -f1
+  fi
+}
+
+confirm(){
+  local i
+  i=$(menu "$1" "$(L 'Não, voltar' 'No, go back')" "$(L 'Sim' 'Yes')")
+  [ "${i:-0}" = 1 ]
+}
+
+if [ -n "${1:-}" ]; then
+  case "$1" in -h|--help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+  do_action "$1"; exit $?
+fi
+
+keys=(lock logout suspend reboot poweroff)
+labels=(
+  "  $(L 'Bloquear a tela' 'Lock screen')"
+  "  $(L 'Sair da sessão' 'Log out')"
+  "  $(L 'Suspender' 'Suspend')"
+  "  $(L 'Reiniciar' 'Reboot')"
+  "  $(L 'Desligar' 'Power off')"
+)
+i=$(menu "$(L 'sessão' 'session')" "${labels[@]}")
+[ -n "${i:-}" ] || exit 0
+k="${keys[$i]}"
+case "$k" in
+  reboot)   confirm "$(L 'Reiniciar agora?' 'Reboot now?')" || exit 0 ;;
+  poweroff) confirm "$(L 'Desligar agora?' 'Power off now?')" || exit 0 ;;
+esac
+do_action "$k"

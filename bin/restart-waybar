@@ -1,8 +1,22 @@
 #!/usr/bin/env sh
+# restart-waybar — (re)start Waybar with the Hyprism config.
+# Honors bar_enabled=off in the Hyprism state: then it only stops Waybar.
 
-pkill waybar 2>/dev/null
+have(){ command -v "$1" >/dev/null 2>&1; }
+
+STATE="$HOME/.config/hypr/themes/.state"
+bar=$(grep -m1 '^bar_enabled=' "$STATE" 2>/dev/null | cut -d= -f2-)
+
+pkill -x waybar 2>/dev/null
+[ "$bar" = off ] && exit 0
+
+if ! have waybar; then
+    echo "restart-waybar: 'waybar' is not installed (sudo pacman -S waybar)" >&2
+    exit 1
+fi
+
 sleep 0.3
 waybar \
     --config "$HOME/.config/waybar/config.jsonc" \
     --style "$HOME/.config/waybar/style.css" \
-    >"$XDG_RUNTIME_DIR/waybar.log" 2>&1 &
+    >"${XDG_RUNTIME_DIR:-/tmp}/waybar.log" 2>&1 </dev/null &

@@ -1,0 +1,18 @@
+# Hacker matrix — green on black, zero chrome, keyboard-first
+# pt: Hacker matrix — verde no preto, zero enfeite, teclado primeiro
+paleta=matrix
+border=1
+rounding=0
+gaps_in=2
+gaps_out=2
+blur=off
+shadow=off
+active_op=100
+inactive_op=90
+anim=rapida
+bar_style=flat
+barh=22
+barpos=bottom
+bar_media=off
+lock_field_style=square
+lock_avatar=nao

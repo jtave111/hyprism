@@ -1,0 +1,16 @@
+# Light day — bright theme for daytime work, soft rounding
+# pt: Dia claro — tema claro pra trabalhar de dia, cantos suaves
+paleta=catppuccin-latte
+border=2
+rounding=8
+gaps_in=5
+gaps_out=10
+blur=off
+shadow=on
+shadow_range=12
+inactive_op=100
+anim=equilibrada
+bar_style=pills
+bar_radius=10
+bar_gap=3
+barh=32

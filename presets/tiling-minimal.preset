@@ -1,0 +1,22 @@
+# Tiling minimal — pure tiling, thin borders, no blur, fast animations
+# pt: Tiling minimalista — só mosaico, bordas finas, sem blur, animações rápidas
+paleta=nord
+layout=dwindle
+float_all=nao
+border=2
+rounding=0
+gaps_in=3
+gaps_out=6
+blur=off
+shadow=off
+active_op=100
+inactive_op=100
+dim_inactive=nao
+anim=rapida
+bar_style=flat
+barh=26
+barpos=top
+bar_workspaces=on
+bar_launcher=off
+bar_media=off
+lock_field_style=square

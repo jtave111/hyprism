@@ -1,0 +1,27 @@
+# Glass — blur, soft shadows, rounded corners, floating pill bar
+# pt: Vidro — blur, sombras suaves, cantos arredondados, barra de pílulas
+paleta=catppuccin-mocha
+layout=dwindle
+float_all=nao
+border=2
+rounding=12
+gaps_in=6
+gaps_out=14
+blur=on
+blur_size=8
+blur_passes=3
+blur_vibrancy=0.25
+shadow=on
+shadow_range=20
+active_op=96
+inactive_op=88
+anim=suave
+bar_style=pills
+bar_margin=8
+bar_radius=14
+bar_gap=4
+barh=34
+barpos=top
+bar_workspaces=on
+lock_field_style=pill
+lock_blur=4

@@ -5,34 +5,80 @@
 #  A transparent full-screen wlr-layer-shell surface (one per monitor)
 #  sits just above the wallpaper and below normal windows, so it only
 #  receives clicks on the *empty desktop*. Right-clicking there pops up a
-#  native GTK menu at the cursor: a BlackArch-style, categorized app menu
-#  with cascading submenus that open on hover, styled with a gradient from
-#  the active Hyprism palette. Click away (or right-click again) to dismiss.
+#  native GTK menu at the cursor: a categorized app menu with cascading
+#  submenus that open on hover, styled from the active Hyprism palette.
+#  Click away (or right-click again) to dismiss.
 #
-#  The taxonomy is data-driven from pacman groups (blackarch-*), so it is
-#  always complete; only INSTALLED tools appear. English labels.
+#  On BlackArch systems a "BlackArch" submenu is added, data-driven from
+#  the pacman groups (blackarch-*), listing only INSTALLED tools. Labels
+#  follow the Hyprism language (lang=en|pt in ~/.config/hypr/themes/.state)
+#  and are re-read every time the menu pops up.
 #
-#  Requires: python-gobject, gtk-layer-shell (GTK3). Autostarted from
+#  Requires: python-gobject, gtk3, gtk-layer-shell. Autostarted from
 #  Hyprland: exec-once = ~/.local/bin/hyprism-desktop
 # =====================================================================
 import os
 import re
+import shlex
 import shutil
-import signal
 import subprocess
 import sys
 
-import gi
 
-gi.require_version("Gtk", "3.0")
+def _missing_deps(detail):
+    sys.stderr.write(
+        "hyprism-desktop: %s\n"
+        "  The desktop menu needs PyGObject, GTK 3 and gtk-layer-shell.\n"
+        "  On Arch:  sudo pacman -S --needed python-gobject gtk3 gtk-layer-shell\n"
+        % detail)
+    sys.exit(1)
+
+
 try:
+    import gi
+except ImportError:
+    _missing_deps("python-gobject (the 'gi' module) is not installed")
+try:
+    gi.require_version("Gtk", "3.0")
     gi.require_version("GtkLayerShell", "0.1")
     from gi.repository import Gtk, Gdk, GtkLayerShell, GLib, Gio
-except (ValueError, ImportError):
-    sys.stderr.write("hyprism-desktop: gtk-layer-shell not available; exiting.\n")
-    sys.exit(0)
+except (ValueError, ImportError) as _exc:
+    _missing_deps("GTK 3 or gtk-layer-shell is not available (%s)" % _exc)
 
 HOME = os.path.expanduser("~")
+STATE = os.path.join(HOME, ".config", "hypr", "themes", ".state")
+COLORS = os.path.join(HOME, ".config", "hypr", "colors.lua")
+CENTER_CLASS = "hyprism-center"  # window class the Hyprland rules float/size
+
+# Hyprland's exec-once environment may not include ~/.local/bin, where the
+# installer links the Hyprism tools; make sure they are found.
+_LOCAL_BIN = os.path.join(HOME, ".local", "bin")
+if os.path.isdir(_LOCAL_BIN) and \
+        _LOCAL_BIN not in os.environ.get("PATH", "").split(os.pathsep):
+    os.environ["PATH"] = os.environ.get("PATH", "") + os.pathsep + _LOCAL_BIN
+
+
+# ---- language ---------------------------------------------------------
+_lang = "en"
+
+
+def read_lang():
+    """The Hyprism language (en|pt) from the state file; en on any doubt."""
+    try:
+        with open(STATE, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if line.startswith("lang="):
+                    v = line.split("=", 1)[1].strip()
+                    return v if v in ("en", "pt") else "en"
+    except OSError:
+        pass
+    return "en"
+
+
+def L(en, pt):
+    """Pick the label for the current menu language."""
+    return pt if _lang == "pt" else en
+
 
 # ---- launching --------------------------------------------------------
 DEVNULL = subprocess.DEVNULL
@@ -41,14 +87,19 @@ GUI_APPS = {
     "ettercap-graphical", "zenmap", "remmina", "gparted", "nwg-displays",
     "blueman-manager", "pavucontrol", "nm-connection-editor",
 }
+# Terminals tried (in order) when $TERMINAL is unset or not installed.
+TERM_FALLBACK = ["kitty", "foot", "alacritty", "wezterm", "konsole", "xterm"]
 
 
 def spawn(cmd):
+    """Start cmd detached. True if it was launched."""
     try:
         subprocess.Popen(cmd, stdout=DEVNULL, stderr=DEVNULL, stdin=DEVNULL,
                          start_new_session=True)
+        return True
     except OSError as exc:
         sys.stderr.write("hyprism-desktop: launch failed: %s\n" % exc)
+        return False
 
 
 def first_of(names):
@@ -59,14 +110,60 @@ def first_of(names):
 
 
 def open_gui(names):
+    """Launch the first installed of names. True if something was launched."""
     n = first_of(names)
-    if n:
-        spawn([n])
+    return spawn([n]) if n else False
+
+
+def terminal():
+    """The terminal as an argv prefix: $TERMINAL (may carry flags) when it
+    resolves, else the first installed of TERM_FALLBACK; None if none."""
+    raw = os.environ.get("TERMINAL", "").strip()
+    if raw:
+        try:
+            base = shlex.split(raw)
+        except ValueError:
+            base = []
+        if base and shutil.which(base[0]):
+            return base
+    t = first_of(TERM_FALLBACK)
+    return [t] if t else None
+
+
+def term_argv(cmd, cls=None):
+    """argv that runs cmd inside the terminal, tagged with window class cls
+    where the terminal supports it."""
+    base = terminal()
+    if base is None:
+        return None
+    name = os.path.basename(base[0])
+    if name in ("kitty", "alacritty"):
+        return base + (["--class", cls] if cls else []) + ["-e"] + cmd
+    if name == "foot":
+        return base + (["--app-id=" + cls] if cls else []) + cmd
+    if name == "wezterm":
+        start = [] if "start" in base[1:] else ["start"]
+        return base + start + (["--class", cls] if cls else []) + ["--"] + cmd
+    if name == "xterm":
+        return base + (["-class", cls] if cls else []) + ["-e"] + cmd
+    if name == "gnome-terminal":
+        return base + (["--class=" + cls] if cls else []) + ["--"] + cmd
+    return base + ["-e"] + cmd  # konsole and most others
+
+
+def term(cmd, cls=None):
+    """Run cmd in a terminal window. True if it was launched."""
+    argv = term_argv(cmd, cls)
+    if argv is None:
+        sys.stderr.write("hyprism-desktop: no terminal found; set $TERMINAL "
+                         "or install one of: %s\n" % ", ".join(TERM_FALLBACK))
+        return False
+    return spawn(argv)
 
 
 def hy(sub):
-    # run a Hyprism subcommand in a themed kitty window (fzf menus live here)
-    spawn(["kitty", "--class", "hyprism-center", "-e", "hyprism"] + sub.split())
+    # run a Hyprism subcommand in a themed terminal window (fzf menus live here)
+    return term(["hyprism"] + sub.split(), cls=CENTER_CLASS)
 
 
 def launch_app(pkg):
@@ -83,7 +180,7 @@ def launch_app(pkg):
     if pkg in GUI_APPS:
         spawn([exe])
     else:
-        spawn(["kitty", "-e", exe])
+        term([exe])
 
 
 # ---- pacman data ------------------------------------------------------
@@ -94,10 +191,14 @@ def run(cmd):
         return ""
 
 
-def load_groups():
-    """One-shot: map every blackarch-<group> to its INSTALLED members.
-    Two pacman calls total (fast) instead of one per group."""
-    installed = set(run(["pacman", "-Qq"]).split())
+GROUPS = {}            # blackarch-<group> -> sorted INSTALLED members
+HAS_BLACKARCH = False  # the sync repos provide blackarch-* groups at all
+
+
+def reload_groups():
+    """Map every blackarch-<group> to its INSTALLED members. Three pacman
+    calls total (fast) instead of one per group. Plain Arch: no groups."""
+    global GROUPS, HAS_BLACKARCH
     names = sorted({
         line.split()[0]
         for line in run(["pacman", "-Sg"]).splitlines()
@@ -105,36 +206,45 @@ def load_groups():
     })
     groups = {}
     if names:
+        installed = set(run(["pacman", "-Qq"]).split())
         for line in run(["pacman", "-Sg"] + names).splitlines():
             parts = line.split()
             if len(parts) == 2 and parts[1] in installed:
                 groups.setdefault(parts[0], []).append(parts[1])
     for g in groups:
         groups[g].sort()
-    return installed, groups
-
-
-INSTALLED, GROUPS = load_groups()
+    GROUPS, HAS_BLACKARCH = groups, bool(names)
 
 
 def group_tools(group):  # group like "blackarch-recon"
     return GROUPS.get(group, [])
 
 
+# (English label, Portuguese label, blackarch categories)
 SPECIALTIES = [
-    ("Recon & OSINT",          ["recon", "fingerprint", "scanner", "social", "database"]),
-    ("Web & Apps",             ["webapp", "code-audit", "fuzzer", "proxy", "mobile"]),
-    ("Exploitation & Access",  ["exploitation", "backdoor", "dos", "malware", "keylogger", "honeypot"]),
-    ("Networks & Wireless",    ["networking", "wireless", "bluetooth", "sniffer", "spoof", "tunnel", "nfc", "voip"]),
-    ("Reversing & Binary",     ["reversing", "binary", "debugger", "disassembler", "decompiler", "packer", "unpacker"]),
-    ("Forensics & Defense",    ["forensic", "anti-forensic", "defensive", "ids", "threat-model", "stego"]),
-    ("Hardware & Radio",       ["hardware", "radio", "firmware", "drone", "automobile", "gpu"]),
-    ("Crypto & Wordlists",     ["crypto", "cracker", "wordlist"]),
-    ("Misc",                   ["automation", "ai", "config", "windows", "misc"]),
+    ("Recon & OSINT",         "Reconhecimento e OSINT",
+     ["recon", "fingerprint", "scanner", "social", "database"]),
+    ("Web & Apps",            "Web e aplicações",
+     ["webapp", "code-audit", "fuzzer", "proxy", "mobile"]),
+    ("Exploitation & Access", "Exploração e acesso",
+     ["exploitation", "backdoor", "dos", "malware", "keylogger", "honeypot"]),
+    ("Networks & Wireless",   "Redes e sem fio",
+     ["networking", "wireless", "bluetooth", "sniffer", "spoof", "tunnel", "nfc", "voip"]),
+    ("Reversing & Binary",    "Engenharia reversa e binários",
+     ["reversing", "binary", "debugger", "disassembler", "decompiler", "packer", "unpacker"]),
+    ("Forensics & Defense",   "Forense e defesa",
+     ["forensic", "anti-forensic", "defensive", "ids", "threat-model", "stego"]),
+    ("Hardware & Radio",      "Hardware e rádio",
+     ["hardware", "radio", "firmware", "drone", "automobile", "gpu"]),
+    ("Crypto & Wordlists",    "Criptografia e wordlists",
+     ["crypto", "cracker", "wordlist"]),
+    ("Misc",                  "Diversos",
+     ["automation", "ai", "config", "windows", "misc"]),
 ]
 
 
 def group_title(group):
+    # BlackArch category names are kept as-is (they are the upstream taxonomy)
     return group.replace("-", " ").title()
 
 
@@ -146,21 +256,22 @@ BROWSERS = ["firefox", "librewolf", "chromium", "google-chrome-stable", "brave",
 # ---- native application menu (freedesktop .desktop categories) --------
 # Standard categories, in display order. An app is filed under every main
 # category it declares; apps with none go to "Other".
+# (English label, Portuguese label, freedesktop categories)
 MAIN_CATS = [
-    ("Office",       {"Office"}),
-    ("Internet",     {"Network"}),
-    ("Multimedia",   {"AudioVideo", "Audio", "Video"}),
-    ("Graphics",     {"Graphics"}),
-    ("Development",  {"Development"}),
-    ("Games",        {"Game"}),
-    ("Utilities",    {"Utility", "Accessories"}),
-    ("System",       {"System", "Settings"}),
-    ("Education",    {"Education", "Science"}),
+    ("Office",       "Escritório",      {"Office"}),
+    ("Internet",     "Internet",        {"Network"}),
+    ("Multimedia",   "Multimídia",      {"AudioVideo", "Audio", "Video"}),
+    ("Graphics",     "Gráficos",        {"Graphics"}),
+    ("Development",  "Desenvolvimento", {"Development"}),
+    ("Games",        "Jogos",           {"Game"}),
+    ("Utilities",    "Utilitários",     {"Utility", "Accessories"}),
+    ("System",       "Sistema",         {"System", "Settings"}),
+    ("Education",    "Educação",        {"Education", "Science"}),
 ]
 
 
 def app_categories():
-    cats = {label: [] for label, _ in MAIN_CATS}
+    cats = {en: [] for en, _pt, _keys in MAIN_CATS}
     other = []
     for app in Gio.AppInfo.get_all():
         try:
@@ -174,14 +285,14 @@ def app_categories():
         raw = getattr(app, "get_categories", lambda: None)() or ""
         decl = {c for c in raw.rstrip(";").split(";") if c}
         placed = False
-        for label, keys in MAIN_CATS:
+        for en, _pt, keys in MAIN_CATS:
             if decl & keys:
-                cats[label].append((name, app))
+                cats[en].append((name, app))
                 placed = True
         if not placed:
             other.append((name, app))
-    for label in cats:
-        cats[label].sort(key=lambda x: x[0].lower())
+    for en in cats:
+        cats[en].sort(key=lambda x: x[0].lower())
     other.sort(key=lambda x: x[0].lower())
     return cats, other
 
@@ -197,40 +308,44 @@ def build_app_list(menu, items):
     for name, app in items:
         menu.append(leaf(name, lambda a=app: launch_appinfo(a)))
     if not items:
-        menu.append(Gtk.MenuItem(label="(none)"))
+        menu.append(Gtk.MenuItem(label=L("(none)", "(nenhum)")))
     menu.show_all()
 
 
 def build_applications(menu):
     cats, other = app_categories()
-    for label, _ in MAIN_CATS:
-        items = cats[label]
+    for en, pt, _keys in MAIN_CATS:
+        items = cats[en]
         if items:
-            menu.append(submenu(label, lambda m, its=items: build_app_list(m, its)))
+            menu.append(submenu(L(en, pt), lambda m, its=items: build_app_list(m, its)))
     if other:
-        menu.append(submenu("Other", lambda m: build_app_list(m, other)))
+        menu.append(submenu(L("Other", "Outros"), lambda m: build_app_list(m, other)))
+    if not menu.get_children():
+        menu.append(Gtk.MenuItem(label=L("(none)", "(nenhum)")))
     menu.show_all()
 
 
 # ---- palette + CSS ----------------------------------------------------
+PALETTE_DEFAULTS = {
+    "bg": "#0a0a0a", "bg2": "#161616", "fg": "#c9c9c9", "dim": "#7a7a7a",
+    "line": "#202020", "accent": "#4c4c4c", "accent_lit": "#8a8a8a",
+    "sel": "#3a0000",
+}
+
+
 def palette():
-    p = {}
     try:
-        txt = open(os.path.join(HOME, ".config/hypr/colors.lua")).read()
-        for k in ("bg", "bg2", "fg", "dim", "line", "accent", "accent_lit", "sel"):
-            m = re.search(k + r'\s*=\s*"(#[0-9A-Fa-f]{6})"', txt)
-            if m:
-                p[k] = m.group(1)
+        with open(COLORS, encoding="utf-8", errors="replace") as f:
+            txt = f.read()
     except OSError:
-        pass
-    p.setdefault("bg", "#0a0a0a"); p.setdefault("bg2", "#161616")
-    p.setdefault("fg", "#c9c9c9"); p.setdefault("dim", "#7a7a7a")
-    p.setdefault("line", "#202020"); p.setdefault("accent", "#4c4c4c")
-    p.setdefault("accent_lit", "#8a8a8a"); p.setdefault("sel", "#3a0000")
+        txt = ""
+    p = dict(PALETTE_DEFAULTS)
+    for k in PALETTE_DEFAULTS:
+        m = re.search(r'\b' + k + r'\s*=\s*"(#[0-9A-Fa-f]{6})"', txt)
+        if m:
+            p[k] = m.group(1)
     # on-accent (text on the selection); parsed if present, else white
-    m = re.search(r'on_accent\s*=\s*"(#[0-9A-Fa-f]{6})"',
-                  open(os.path.join(HOME, ".config/hypr/colors.lua")).read()
-                  if os.path.exists(os.path.join(HOME, ".config/hypr/colors.lua")) else "")
+    m = re.search(r'\bon_accent\s*=\s*"(#[0-9A-Fa-f]{6})"', txt)
     p["onacc"] = m.group(1) if m else "#ffffff"
     return p
 
@@ -283,17 +398,6 @@ separator { background-color: %(line)s; min-height: 1px; margin: 2px 0px; }
 """ % p).encode()
 
 
-def apply_css():
-    prov = Gtk.CssProvider()
-    prov.load_from_data(css_for(palette()))
-    # USER priority overrides the system GTK theme, so the menu always wears the
-    # Hyprism look regardless of the ambient GTK theme (Adwaita, etc.).
-    Gtk.StyleContext.add_provider_for_screen(
-        Gdk.Screen.get_default(), prov,
-        Gtk.STYLE_PROVIDER_PRIORITY_USER,
-    )
-
-
 # ---- menu building ----------------------------------------------------
 def leaf(label, cb):
     it = Gtk.MenuItem(label=label)
@@ -325,14 +429,16 @@ def build_specialty(menu, groups):
             menu.append(submenu(group_title(g), lambda m, gg=grp: build_category(m, gg)))
             added = True
     if not added:
-        menu.append(Gtk.MenuItem(label="(none installed)"))
+        menu.append(Gtk.MenuItem(label=L("(none installed)", "(nenhum instalado)")))
     menu.show_all()
 
 
 def build_blackarch(menu):
-    for label, groups in SPECIALTIES:
+    for en, pt, groups in SPECIALTIES:
         if any(group_tools("blackarch-" + g) for g in groups):
-            menu.append(submenu(label, lambda m, gg=groups: build_specialty(m, gg)))
+            menu.append(submenu(L(en, pt), lambda m, gg=groups: build_specialty(m, gg)))
+    if not menu.get_children():
+        menu.append(Gtk.MenuItem(label=L("(none installed)", "(nenhum instalado)")))
     menu.show_all()
 
 
@@ -340,150 +446,125 @@ def build_list(menu, names):
     for n in names:
         if shutil.which(n):
             menu.append(leaf(n, lambda app=n: spawn([app])))
+    if not menu.get_children():
+        menu.append(Gtk.MenuItem(label=L("(none installed)", "(nenhum instalado)")))
     menu.show_all()
 
 
+# (English label, Portuguese label, hyprism subcommand)
 APPEARANCE = [
-    ("Palette", "palette"), ("Wallpaper", "wallpaper"), ("Bar & style", "style"),
-    ("Bar modules", "modules"), ("Cursor", "cursor"), ("Effects", "effects"),
-    ("Animations", "animations"), ("Borders", "borders"), ("Lock screen", "lock"),
-    ("Notifications", "notifications"), ("Font", "font"),
+    ("Palette",       "Paleta",           "palette"),
+    ("Wallpaper",     "Papel de parede",  "wallpaper"),
+    ("Bar & style",   "Barra e estilo",   "style"),
+    ("Bar modules",   "Módulos da barra", "modules"),
+    ("Cursor",        "Cursor",           "cursor"),
+    ("Effects",       "Efeitos",          "effects"),
+    ("Animations",    "Animações",        "animations"),
+    ("Borders",       "Bordas",           "borders"),
+    ("Lock screen",   "Tela de bloqueio", "lock"),
+    ("Notifications", "Notificações",     "notifications"),
+    ("Font",          "Fonte",            "font"),
 ]
 
 
 def build_appearance(menu):
-    for label, sub in APPEARANCE:
-        menu.append(leaf(label, lambda s=sub: hy(s)))
+    for en, pt, sub in APPEARANCE:
+        menu.append(leaf(L(en, pt), lambda s=sub: hy(s)))
     menu.show_all()
 
 
+def open_network():
+    # Network = plain nmtui (the user's choice), in a themed terminal window.
+    if shutil.which("nmtui") and term(["nmtui"], cls=CENTER_CLASS):
+        return True
+    return hy("system")
+
+
 def build_system(menu):
-    # Network = plain nmtui (the user's choice), in a themed kitty window.
-    menu.append(leaf("Network", lambda: spawn(["kitty", "--class", "hyprism-center", "-e", "nmtui"])))
-    menu.append(leaf("Sound", lambda: open_gui(["pavucontrol", "pwvucontrol"])
-                     or hy("system")))
-    menu.append(leaf("Bluetooth", lambda: open_gui(["blueman-manager", "overskride"])
-                     or hy("system")))
-    menu.append(leaf("Displays", lambda: open_gui(["nwg-displays", "wdisplays"])
-                     or hy("system")))
+    menu.append(leaf(L("Network", "Rede"), open_network))
+    menu.append(leaf(L("Sound", "Som"),
+                     lambda: open_gui(["pavucontrol", "pwvucontrol"]) or hy("system")))
+    menu.append(leaf("Bluetooth",
+                     lambda: open_gui(["blueman-manager", "overskride"]) or hy("system")))
+    menu.append(leaf(L("Displays", "Telas"),
+                     lambda: open_gui(["nwg-displays", "wdisplays"]) or hy("system")))
     menu.show_all()
 
 
 def build_language(menu):
+    # language names are shown in their own language, never translated
     menu.append(leaf("English", lambda: spawn(["hyprism", "lang", "en"])))
     menu.append(leaf("Português", lambda: spawn(["hyprism", "lang", "pt"])))
     menu.show_all()
 
 
 def build_hyprism(menu):
-    menu.append(submenu("Appearance", build_appearance))
-    menu.append(submenu("System", build_system))
-    menu.append(leaf("Keybindings", lambda: hy("binds")))
-    menu.append(submenu("Language", build_language))
+    menu.append(submenu(L("Appearance", "Aparência"), build_appearance))
+    menu.append(submenu(L("System", "Sistema"), build_system))
+    menu.append(leaf(L("Keybindings", "Atalhos de teclado"), lambda: hy("binds")))
+    menu.append(submenu(L("Language", "Idioma"), build_language))
     menu.append(Gtk.SeparatorMenuItem())
-    menu.append(leaf("Full center…", lambda: hy("menu")))
-    menu.append(leaf("Active config", lambda: hy("config")))
-    menu.append(leaf("Sync theme", lambda: hy("sync")))
+    menu.append(leaf(L("Full center…", "Central completa…"), lambda: hy("menu")))
+    menu.append(leaf(L("Active config", "Configuração ativa"), lambda: hy("config")))
+    menu.append(leaf(L("Sync theme", "Sincronizar tema"), lambda: hy("sync")))
     menu.show_all()
 
 
-def build_root():
+def build_root(lang):
+    global _lang
+    _lang = lang
     root = Gtk.Menu()
-    root.append(submenu("Terminals", lambda m: build_list(m, TERMINALS)))
-    root.append(submenu("Browsers", lambda m: build_list(m, BROWSERS)))
+    root.append(submenu(L("Terminals", "Terminais"), lambda m: build_list(m, TERMINALS)))
+    root.append(submenu(L("Browsers", "Navegadores"), lambda m: build_list(m, BROWSERS)))
     if shutil.which("thunar"):
-        root.append(leaf("Files", lambda: spawn(["thunar"])))
+        root.append(leaf(L("Files", "Arquivos"), lambda: spawn(["thunar"])))
     root.append(Gtk.SeparatorMenuItem())
-    root.append(submenu("Applications", build_applications))
-    root.append(submenu("BlackArch", build_blackarch))
+    root.append(submenu(L("Applications", "Aplicativos"), build_applications))
+    if HAS_BLACKARCH:
+        root.append(submenu("BlackArch", build_blackarch))
     root.append(submenu("Hyprism", build_hyprism))
-    root.append(Gtk.SeparatorMenuItem())
+    if shutil.which("hyprism-settings"):
+        root.append(leaf(L("System settings", "Configurações do sistema"),
+                         lambda: term(["hyprism-settings"], cls=CENTER_CLASS)))
     if shutil.which("hyprlock"):
-        root.append(leaf("Lock screen", lambda: spawn(["hyprlock"])))
+        root.append(Gtk.SeparatorMenuItem())
+        root.append(leaf(L("Lock screen", "Bloquear tela"), lambda: spawn(["hyprlock"])))
     root.show_all()
     return root
 
 
 # ---- the desktop surfaces + right-click ------------------------------
-CACHE_DIR = os.path.join(HOME, ".cache", "hyprism")
-CACHE = os.path.join(CACHE_DIR, "appmenu.csv")
-JGMENU_RC = os.path.join(HOME, ".config", "jgmenu", "jgmenurc")
-
-
-def regen_cache(background=True):
-    """Generate the jgmenu menu once and cache it, so a right-click is instant
-    instead of paying ~0.8s of pacman/Gio work every time. Atomic via tmp+mv."""
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    cmd = ["sh", "-c",
-           'hyprism-appmenu > "%s.tmp" 2>/dev/null && mv "%s.tmp" "%s"'
-           % (CACHE, CACHE, CACHE)]
-    try:
-        if background:
-            subprocess.Popen(cmd, stdout=DEVNULL, stderr=DEVNULL, stdin=DEVNULL,
-                             start_new_session=True)
-        else:
-            subprocess.run(cmd, stdout=DEVNULL, stderr=DEVNULL)
-    except OSError:
-        pass
-
-
-def cursor_pos(event):
-    """Global cursor position. hyprctl is authoritative on Hyprland; fall back
-    to the GTK event's root coords."""
-    out = run(["hyprctl", "cursorpos"])
-    try:
-        xs, ys = out.strip().split(",")
-        return int(xs.strip()), int(ys.strip())
-    except (ValueError, AttributeError):
-        try:
-            return int(event.x_root), int(event.y_root)
-        except Exception:
-            return 0, 0
-
-
-def position_config(x, y):
-    """A one-shot jgmenu config: the themed rc with the position pinned to
-    (x, y). jgmenu's own --at-pointer misreads the pointer under XWayland, so we
-    place the menu ourselves at the real cursor."""
-    try:
-        base = open(JGMENU_RC).read().splitlines()
-    except OSError:
-        base = []
-    drop = ("position_mode", "menu_margin_x", "menu_margin_y",
-            "menu_valign", "menu_halign")
-    lines = [ln for ln in base if not any(ln.lstrip().startswith(k) for k in drop)]
-    lines += [
-        "position_mode = fixed",
-        "menu_valign = top",
-        "menu_halign = left",
-        "menu_margin_x = %d" % max(0, x),
-        "menu_margin_y = %d" % max(0, y),
-    ]
-    path = os.path.join(CACHE_DIR, "jgmenu-pos.rc")
-    try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(path, "w") as f:
-            f.write("\n".join(lines) + "\n")
-        return path
-    except OSError:
-        return JGMENU_RC
-
-
 class Desktop:
     def __init__(self):
         # Force left-to-right so EVERY submenu (and nested submenu) cascades to
         # the RIGHT by default, instead of GTK opening them to the left.
         Gtk.Widget.set_default_direction(Gtk.TextDirection.LTR)
-        apply_css()
-        self.jgmenu_proc = None
+        # USER priority overrides the system GTK theme, so the menu always wears
+        # the Hyprism look regardless of the ambient GTK theme (Adwaita, etc.).
+        self.css = Gtk.CssProvider()
+        self.css_data = None
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(), self.css,
+            Gtk.STYLE_PROVIDER_PRIORITY_USER,
+        )
+        self.refresh_css()
         try:
             settings = Gtk.Settings.get_default()
             settings.set_property("gtk-menu-popup-delay", 0)  # open submenus on hover, instant
         except (TypeError, AttributeError):
             pass
-        self.menu = build_root()
-        self.menu.set_direction(Gtk.TextDirection.LTR)
-        self.menu.connect("deactivate", self.on_menu_closed)
+        self.menu = None
+        self.menu_lang = None
+        self.stale = True  # installed apps/tools changed -> rebuild the menu
+        self._active = None
+        try:
+            # Installing/removing apps changes the .desktop set: rebuild on the
+            # next right-click (also re-reads the pacman groups).
+            self._appmon = Gio.AppInfoMonitor.get()
+            self._appmon.connect("changed", self.on_apps_changed)
+        except (AttributeError, TypeError):
+            self._appmon = None
+        self.ensure_menu()  # build now so the first right-click is instant
         self.surfaces = []
         display = Gdk.Display.get_default()
         n = display.get_n_monitors() if display else 0
@@ -491,6 +572,38 @@ class Desktop:
             self.surfaces.append(self.make_surface(None))
         for i in range(n):
             self.surfaces.append(self.make_surface(display.get_monitor(i)))
+
+    def refresh_css(self):
+        """Follow the active palette: reload the CSS only when it changed."""
+        data = css_for(palette())
+        if data == self.css_data:
+            return
+        try:
+            self.css.load_from_data(data)
+            self.css_data = data
+        except GLib.Error as exc:
+            sys.stderr.write("hyprism-desktop: CSS error: %s\n" % exc)
+
+    def on_apps_changed(self, _monitor):
+        self.stale = True
+
+    def ensure_menu(self):
+        """(Re)build the menu when the language or the installed apps changed.
+        The language is re-read on every popup, so 'hyprism lang' applies to
+        the next right-click without restarting the daemon."""
+        lang = read_lang()
+        if self.menu is not None and lang == self.menu_lang and not self.stale:
+            return
+        if self.stale:
+            reload_groups()
+        old = self.menu
+        self.menu = build_root(lang)
+        self.menu.set_direction(Gtk.TextDirection.LTR)
+        self.menu.connect("deactivate", self.on_menu_closed)
+        self.menu_lang = lang
+        self.stale = False
+        if old is not None:
+            old.destroy()
 
     def make_surface(self, monitor):
         win = Gtk.Window()
@@ -518,10 +631,12 @@ class Desktop:
     def on_button(self, widget, event):
         if event.button != 3:
             return False
-        # Native GTK menu. It opens EXACTLY at the cursor (popup_at_pointer),
-        # cascades submenus to the right on hover, and closes on click-away — all
-        # reliable on Hyprland/Wayland. (jgmenu was dropped here: its X11 windows
-        # are repositioned by the compositor, so it never lands at the click.)
+        # Pick up palette / language / installed-app changes since last time.
+        self.refresh_css()
+        self.ensure_menu()
+        # Native GTK menu. It opens EXACTLY at the cursor, cascades submenus to
+        # the right on hover, and closes on click-away — all reliable on
+        # Hyprland/Wayland.
         # Raise this surface to the overlay layer so the popup is above windows.
         self._active = widget
         GtkLayerShell.set_keyboard_mode(widget, GtkLayerShell.KeyboardMode.ON_DEMAND)
@@ -536,13 +651,22 @@ class Desktop:
         return True
 
     def on_menu_closed(self, _menu):
-        w = getattr(self, "_active", None)
+        w = self._active
         if w is not None:
             GtkLayerShell.set_keyboard_mode(w, GtkLayerShell.KeyboardMode.NONE)
             GtkLayerShell.set_layer(w, GtkLayerShell.Layer.BOTTOM)
 
 
 def main():
+    if Gdk.Display.get_default() is None:
+        sys.stderr.write("hyprism-desktop: no display; run it inside a "
+                         "Hyprland (Wayland) session.\n")
+        sys.exit(1)
+    is_supported = getattr(GtkLayerShell, "is_supported", None)
+    if is_supported is not None and not is_supported():
+        sys.stderr.write("hyprism-desktop: the compositor does not support "
+                         "wlr-layer-shell (is this Hyprland?).\n")
+        sys.exit(1)
     Desktop()
     Gtk.main()
 

@@ -1,0 +1,6 @@
+#!/bin/sh
+# hyprism-launcher — app launcher toggle (SUPER + SPACE and the bar button).
+# A second press closes rofi instead of stacking another instance.
+command -v rofi >/dev/null 2>&1 || { echo "hyprism-launcher: install rofi (pacman -S rofi)" >&2; exit 1; }
+pkill -x rofi && exit 0
+exec rofi -show drun "$@"

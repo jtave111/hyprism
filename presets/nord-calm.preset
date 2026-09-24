@@ -1,0 +1,15 @@
+# Nord calm — cool arctic tones, clean and quiet
+# pt: Nord calmo — tons árticos frios, limpo e silencioso
+paleta=nord
+border=2
+rounding=6
+gaps_in=4
+gaps_out=10
+blur=off
+shadow=off
+inactive_op=95
+anim=suave
+bar_style=flat
+barh=28
+barpos=top
+bar_workspaces=on

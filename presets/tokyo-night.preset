@@ -1,0 +1,18 @@
+# Tokyo night — deep blue night palette, smooth animations, subtle blur
+# pt: Tokyo night — azul noturno profundo, animações suaves, blur sutil
+paleta=tokyo-night
+border=2
+rounding=10
+gaps_in=5
+gaps_out=12
+blur=on
+blur_size=5
+blur_passes=2
+shadow=on
+inactive_op=92
+anim=suave
+bar_style=segmented
+bar_radius=10
+bar_gap=6
+barh=32
+bar_workspaces=on

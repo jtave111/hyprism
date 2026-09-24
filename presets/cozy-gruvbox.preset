@@ -1,0 +1,18 @@
+# Cozy gruvbox — warm retro colors, gentle rounding, segmented bar
+# pt: Gruvbox aconchegante — cores quentes retrô, cantos suaves, barra segmentada
+paleta=gruvbox-dark
+border=2
+rounding=8
+gaps_in=5
+gaps_out=10
+blur=off
+shadow=on
+shadow_range=14
+inactive_op=95
+anim=equilibrada
+bar_style=segmented
+bar_radius=8
+bar_gap=6
+barh=30
+barpos=top
+bar_workspaces=on

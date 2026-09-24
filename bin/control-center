@@ -16,9 +16,10 @@ have(){ command -v "$1" >/dev/null 2>&1; }
 
 # Segue o idioma do Hyprism ('hyprism lang en|pt').
 LANGX=$(grep -m1 '^lang=' "$HOME/.config/hypr/themes/.state" 2>/dev/null | cut -d= -f2-)
-[ "$LANGX" = en ] || LANGX=pt
+[ "$LANGX" = pt ] || LANGX=en
 L(){ [ "$LANGX" = en ] && printf '%s' "$2" || printf '%s' "$1"; }   # L "pt" "en"
-term(){ setsid kitty -e "$@" >/dev/null 2>&1 < /dev/null & }
+TERM_APP="${TERMINAL:-$(command -v kitty || command -v foot || command -v alacritty || echo xterm)}"
+term(){ setsid "$TERM_APP" -e "$@" >/dev/null 2>&1 < /dev/null & }
 gui(){  setsid "$@" >/dev/null 2>&1 < /dev/null & }
 
 I_NET=$''; I_WIFI=$''; I_SOM=$''; I_BT=$''
@@ -28,9 +29,10 @@ I_TELA=$''; I_COR=$''; I_SEG=$''; I_SIS=$''
 itens(){
   # ---- Hyprism (a central visual: aparencia de tudo num lugar so) ----
   have visualconf && echo "$I_COR|Hyprism|visualconf|term"
+  have hyprism-settings && echo "$I_SIS|$(L "Configurações do sistema" "System settings")|hyprism-settings|term"
 
   # ---- rede ----
-  echo "$I_WIFI|$(L "Wi-Fi: conectar, salvar, esquecer" "Wi-Fi: connect, save, forget")|wifi-menu|gui"
+  have wifi-menu && have nmcli && echo "$I_WIFI|$(L "Wi-Fi: conectar, salvar, esquecer" "Wi-Fi: connect, save, forget")|wifi-menu|gui"
   have nm-connection-editor && \
     echo "$I_NET|$(L "Rede: VPN, 802.1X, IP fixo, rotas" "Network: VPN, 802.1X, static IP, routes")|nm-connection-editor|gui"
   have nmtui && echo "$I_NET|$(L "Rede no terminal (nmtui)" "Network in the terminal (nmtui)")|nmtui|term"
@@ -54,7 +56,7 @@ itens(){
   # O Hyprism (visualconf) ja esta no topo do menu; aqui ficam apenas os
   # configuradores avulsos, para quando o Hyprism nao estiver instalado.
   if ! have visualconf; then
-    have hyprtheme  && echo "$I_COR|$(L "Aparencia do Hyprland (hyprtheme)" "Hyprland appearance (hyprtheme)")|hyprtheme|term"
+    have hyprism  && echo "$I_COR|$(L "Aparencia do Hyprland (hyprism)" "Hyprland appearance (hyprism)")|hyprism|term"
     have rofitheme  && echo "$I_COR|$(L "Aparencia do launcher (rofitheme)" "Launcher appearance (rofitheme)")|rofitheme|term"
     have kittytheme && echo "$I_COR|$(L "Aparencia do terminal (kittytheme)" "Terminal appearance (kittytheme)")|kittytheme|term"
   fi

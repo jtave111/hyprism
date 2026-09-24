@@ -1,0 +1,17 @@
+# Performance — no animations, blur or shadows; best for gaming and older hardware
+# pt: Desempenho — sem animações, blur ou sombras; ideal pra jogos e hardware antigo
+paleta=gruvbox-dark
+border=1
+rounding=0
+gaps_in=0
+gaps_out=0
+blur=off
+shadow=off
+active_op=100
+inactive_op=100
+dim_inactive=nao
+anim=desligada
+bar_style=flat
+barh=24
+bar_media=off
+bar_temperature=off

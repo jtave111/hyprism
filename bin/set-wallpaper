@@ -32,6 +32,14 @@ case "$ext" in
   gif|mp4|webm|mkv|mov|avi) is_animated=1 ;;
 esac
 
+# Still images (and the first-frame fallback) need swaybg.
+require_swaybg(){
+  have swaybg && return 0
+  echo "ERROR: 'swaybg' is not installed; it is needed for still wallpapers." >&2
+  echo "  Install it:  sudo pacman -S swaybg" >&2
+  exit 1
+}
+
 start_static(){ # start_static <image>
   setsid swaybg -i "$1" -m fill >/dev/null 2>&1 < /dev/null &
 }
@@ -55,8 +63,9 @@ stop_all(){
 }
 
 first_frame(){ # first_frame <video> -> path to a png
-  local out="$CACHE/frame-$(basename "$F" | tr -c '[:alnum:]._-' '_').png"
-  if [ ! -f "$out" ] || [ "$F" -nt "$out" ]; then
+  local out
+  out="$CACHE/frame-$(basename "$1" | tr -c '[:alnum:]._-' '_').png"
+  if [ ! -f "$out" ] || [ "$1" -nt "$out" ]; then
     if have ffmpeg; then
       ffmpeg -y -loglevel error -i "$1" -vframes 1 "$out" >/dev/null 2>&1
     elif have magick; then
@@ -75,17 +84,24 @@ if [ "$is_animated" -eq 1 ]; then
       ALL "$F" >/dev/null 2>&1 < /dev/null &
     echo "animated wallpaper: $(basename "$F")  (mpvpaper)"
   else
+    if ! have swaybg; then
+      echo "ERROR: neither 'mpvpaper' (animated) nor 'swaybg' (still) is installed." >&2
+      echo "  To animate, install AUR: mpvpaper (yay -S mpvpaper or paru -S mpvpaper)" >&2
+      echo "  For still wallpapers:    sudo pacman -S swaybg" >&2
+      exit 1
+    fi
     frame=$(first_frame "$F")
     if [ -n "${frame:-}" ]; then
       swap_static "$frame"
       echo "NOTE: 'mpvpaper' not installed — showing the first frame as a still."
-      echo "  To actually animate:  yay -S mpvpaper"
+      echo "  To actually animate, install AUR: mpvpaper (yay -S mpvpaper or paru -S mpvpaper)"
     else
       echo "ERROR: animated file and neither mpvpaper nor a way to extract the frame."
       exit 1
     fi
   fi
 else
+  require_swaybg
   swap_static "$F"
   echo "wallpaper: $(basename "$F")  (swaybg)"
 fi

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# hyprism-open CMD [ARGS...] — run a Hyprism TUI (visualconf, hyprism-settings,
+# nmtui…) in a terminal window whose class is "hyprism-center", so the window
+# rule makes it float, centered, at a comfortable size. Works with kitty,
+# foot, alacritty, wezterm, ghostty and konsole; $TERMINAL wins when set.
+set -u
+[ $# -gt 0 ] || { echo "usage: hyprism-open CMD [ARGS...]" >&2; exit 2; }
+have(){ command -v "$1" >/dev/null 2>&1; }
+
+term="${TERMINAL:-}"
+if [ -z "$term" ] || ! have "$term"; then
+  for t in kitty foot alacritty wezterm ghostty konsole xterm; do have "$t" && { term=$t; break; }; done
+fi
+[ -n "$term" ] || { echo "hyprism-open: no terminal found (pacman -S kitty)" >&2; exit 1; }
+
+case "$(basename "$term")" in
+  kitty)     exec setsid kitty --class hyprism-center -e "$@" ;;
+  foot)      exec setsid foot --app-id hyprism-center "$@" ;;
+  alacritty) exec setsid alacritty --class hyprism-center -e "$@" ;;
+  wezterm)   exec setsid wezterm start --class hyprism-center -- "$@" ;;
+  ghostty)   exec setsid ghostty --class=hyprism-center -e "$@" ;;
+  konsole)   exec setsid konsole -e "$@" ;;
+  *)         exec setsid "$term" -e "$@" ;;
+esac

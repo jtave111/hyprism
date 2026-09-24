@@ -1,0 +1,19 @@
+# Rosé Pine soft — muted pastel palette, rounded and airy
+# pt: Rosé Pine suave — pastel discreto, arredondado e arejado
+paleta=rose-pine
+border=2
+rounding=14
+gaps_in=8
+gaps_out=16
+blur=on
+blur_size=7
+blur_passes=3
+shadow=on
+inactive_op=90
+anim=suave
+bar_style=pills
+bar_margin=10
+bar_radius=16
+bar_gap=5
+barh=34
+lock_field_style=pill

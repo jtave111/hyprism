@@ -1,0 +1,21 @@
+# Retro terminal — hard edges, no gaps, monochrome with one accent, like a 90s console
+# pt: Terminal retrô — cantos retos, sem gaps, monocromático com um acento, console anos 90
+paleta=terminal-red
+layout=dwindle
+float_all=nao
+border=1
+rounding=0
+gaps_in=0
+gaps_out=0
+blur=off
+shadow=off
+active_op=100
+inactive_op=100
+anim=rapida
+bar_style=flat
+barh=24
+barpos=bottom
+bar_workspaces=on
+lock_field_style=square
+lock_frame=sim
+lock_avatar=nao

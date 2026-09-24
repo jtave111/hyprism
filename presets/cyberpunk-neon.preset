@@ -1,0 +1,21 @@
+# Cyberpunk neon — neon accents, elastic animations, glowing pills
+# pt: Cyberpunk neon — acentos neon, animações elásticas, pílulas brilhantes
+paleta=cyberpunk
+border=2
+rounding=6
+gaps_in=6
+gaps_out=12
+blur=on
+blur_size=6
+blur_passes=2
+shadow=on
+shadow_range=18
+active_op=95
+inactive_op=85
+anim=elastica
+bar_style=pills
+bar_radius=6
+bar_gap=4
+barh=32
+bar_workspaces=on
+lock_frame=sim
