@@ -4,18 +4,20 @@
 #  A theming command center for Hyprland (Waybar, Hyprlock, Dunst,
 #  Kitty and Rofi) driven by a single palette + a central state file.
 #
-#  no arguments .......... open the full menu
+#  no arguments .......... open the visual center (visualconf), or the
+#                          built-in menu when visualconf is not installed
 #  hyprism <palette> ..... apply a palette directly
-#  hyprism palette | wallpaper | appearance | effects | bar | style | modules
-#  hyprism windows | workspaces | animations | input | cursor
+#  hyprism palette | wallpaper | appearance | borders | effects | bar | style
+#  hyprism modules | windows | workspaces | animations | input | cursor
 #  hyprism effects [performance|subtle|glass|focus]
 #  hyprism animations [off|fast|balanced|smooth|elastic]
 #  hyprism style [flat|pills|segmented]
-#  hyprism lock | notifications
-#  hyprism font | binds | preset | config
+#  hyprism lock | sddm (login) | notifications | network | system | menu
+#  hyprism font | binds | preset | config | render
 #  hyprism lang [en|pt] ... switch the interface language
 #  hyprism sync .......... reapply the global theme to Kitty and Rofi
-#  hyprism -l list   -r random   -g regenerate palettes   -h help
+#  hyprism -l list  -r random  -g regenerate palettes  -h help  -V version
+#  (hyprism -h prints the complete, translated list)
 #
 #  How it works: every choice becomes a knob in two generated files —
 #    ~/.config/hypr/colors.lua  (colors)
@@ -40,18 +42,39 @@ LOOK="$HD/look.lua"
 WALLFILE="$HD/wallpaper"
 WBAR="$HOME/.config/waybar"
 KTD="$HOME/.config/kitty/themes"
-WALLDIR="$HOME/Pictures/wallpaper"
+# Wallpaper folder: $HYPRISM_WALLDIR, else <XDG Pictures>/wallpaper. An older
+# ~/Pictures/wallpaper keeps working when the XDG one does not exist.
+if [ -n "${HYPRISM_WALLDIR:-}" ]; then
+  WALLDIR="$HYPRISM_WALLDIR"
+else
+  _pics=$(xdg-user-dir PICTURES 2>/dev/null)
+  { [ -z "$_pics" ] || [ "$_pics" = "$HOME" ]; } && _pics="$HOME/Pictures"
+  WALLDIR="$_pics/wallpaper"
+  [ ! -d "$WALLDIR" ] && [ -d "$HOME/Pictures/wallpaper" ] && WALLDIR="$HOME/Pictures/wallpaper"
+  unset _pics
+fi
 WALLCACHE="$HOME/.cache/hyprism/live-wallpaper"
 SELF="$(command -v hyprism 2>/dev/null || command -v hyprtheme 2>/dev/null || printf '%s' "$0")"
+# Repo root (bin/..), resolved through the ~/.local/bin symlink.
+HYPRISM_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." 2>/dev/null && pwd)"
 THUMBS="$HOME/.cache/hyprism/thumbs"
 mkdir -p "$PAL" "$PRESETS" "$WBAR" "$WALLCACHE" "$THUMBS"
 
 have(){ command -v "$1" >/dev/null 2>&1; }
 
-FZF(){ fzf --height=92% --layout=reverse --border=rounded --info=inline-right --ansi --no-separator \
-  --margin=1 --padding=1 --gap=1 --pointer='▸' --marker='✓' --scrollbar='│' \
-  --color='bg:-1,bg+:#1b1111,fg:#b8b8b8,fg+:#ffffff,hl:#ff4a4a,hl+:#ff6a6a:bold,pointer:#ff2b2b,prompt:#ff2b2b:bold,marker:#ff6a6a,info:#666666,header:#888888,border:#5a0000,gutter:-1' \
-  "$@"; }
+# Shared retro TUI style (lib/ui.sh). fzf runs its preview/bind commands with
+# $SHELL; forcing bash keeps the quoting in those strings predictable even when
+# the login shell is fish/zsh.
+# shellcheck source=../lib/ui.sh
+[ -r "$HYPRISM_ROOT/lib/ui.sh" ] && . "$HYPRISM_ROOT/lib/ui.sh"
+if declare -F ui_fzf >/dev/null; then
+  FZF(){ ui_init; SHELL="$BASH" ui_fzf --border-label=" ${UI_E_BAR} HYPRISM ${UI_E_RST} " "$@"; }
+else
+  FZF(){ SHELL="$BASH" fzf --height=92% --layout=reverse --border=rounded --info=inline-right --ansi --no-separator \
+    --margin=1 --padding=1 --gap=1 --pointer='▸' --marker='✓' --scrollbar='│' \
+    --color='bg:-1,bg+:#1b1111,fg:#b8b8b8,fg+:#ffffff,hl:#ff4a4a,hl+:#ff6a6a:bold,pointer:#ff2b2b,prompt:#ff2b2b:bold,marker:#ff6a6a,info:#666666,header:#888888,border:#5a0000,gutter:-1' \
+    "$@"; }
+fi
 
 # Menu/option variant: lines are "KEY<TAB>LABEL"; only the translated LABEL is
 # shown and searched, while the canonical KEY (a menu route or a state value)
@@ -64,17 +87,14 @@ mkey(){ printf '%s' "${1%%$'\t'*}"; }   # canonical KEY from a selected line
 # ---------- personality / colored output ----------
 # Honors NO_COLOR and only paints when stdout is a terminal.
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
-  C_RST=$'\033[0m'; C_B=$'\033[1m'; C_DIM=$'\033[2m'
+  C_RST=$'\033[0m'
   C_RED=$'\033[38;5;203m'; C_GRN=$'\033[38;5;114m'; C_YEL=$'\033[38;5;179m'
-  C_ACC=$'\033[38;5;211m'; C_GREY=$'\033[38;5;245m'
 else
-  C_RST=''; C_B=''; C_DIM=''; C_RED=''; C_GRN=''; C_YEL=''; C_ACC=''; C_GREY=''
+  C_RST=''; C_RED=''; C_GRN=''; C_YEL=''
 fi
 ok(){   printf '  %s✓%s %s\n' "$C_GRN" "$C_RST" "$*"; }
-info(){ printf '  %s▸%s %s\n' "$C_ACC" "$C_RST" "$*"; }
 warn(){ printf '  %s!%s %s\n' "$C_YEL" "$C_RST" "$*"; }
 err(){  printf '  %s✗%s %s\n' "$C_RED" "$C_RST" "$*" >&2; }
-say(){  printf '  %s%s%s\n'   "$C_GREY" "$*" "$C_RST"; }
 
 # ---------- i18n (English base, optional Portuguese) ----------
 # t 'English source' -> Portuguese when lang=pt and a translation exists,
@@ -165,7 +185,6 @@ load_pt(){ PT=(
   ['bright red']='vermelho vivo'
   ['capsule']='capsula'
   ['center']='centralizar'
-  ['centered']='centralizada'
   ['choose minimal, balanced or full']='escolher minimo, equilibrado ou completo'
   ['circular (default)']='circular (padrao)'
   ['clickable Wi-Fi']='Wi-Fi clicavel'
@@ -258,7 +277,6 @@ load_pt(){ PT=(
   ['global palette']='paleta global'
   ['global theme']='tema global'
   ['green']='verde'
-  ['height, position and font of the bar']='altura, posicao e fonte da barra'
   ['hide after']='esconder apos'
   ['hide on the locked screen']='esconder na tela bloqueada'
   ['hide the cursor']='esconder o cursor'
@@ -278,7 +296,6 @@ load_pt(){ PT=(
   ['inactive window']='janela inativa'
   ['includes SUPER+0']='inclui SUPER+0'
   ['inner']='dentro'
-  ['install fzf for the menu, or use: hyprism <palette>']='instale o fzf para o menu, ou use: hyprism <paleta>'
   ['intense']='intensa'
   ['intensity']='intensidade'
   ['interface language (English / Portuguese)']='idioma da interface (Ingles / Portugues)'
@@ -309,7 +326,6 @@ load_pt(){ PT=(
   ['light red']='vermelho claro'
   ['light shadow and inactive at 96%']='sombra leve e inativas a 96%'
   ['limit blur to normal surfaces (default)']='limita o blur a superficie normal (padrao)'
-  ['list, random, regenerate palettes, help']='lista, aleatorio, regera paletas, ajuda'
   ['lock']='bloqueio'
   ['lock screen']='tela de bloqueio'
   ['long']='longa'
@@ -369,7 +385,6 @@ load_pt(){ PT=(
   ['opening, focus, snapping and tiling options']='opcoes de abertura, foco, encaixe e mosaico'
   ['opening, layout, snapping and focus']='abertura, layout, encaixe e foco'
   ['opening size']='tamanho de abertura'
-  ['open the full menu']='abre o menu completo'
   ['open windows']='janelas abertas'
   ['orange']='laranja'
   ['original']='original'
@@ -597,7 +612,7 @@ load_pt(){ PT=(
   ['show the avatar']='mostrar o avatar'
   ['hide the avatar']='esconder o avatar'
   ['Type a line for the bottom of the lock screen.']='Escreva uma linha pro rodape da tela de bloqueio.'
-  ['Leave empty for the default hint']='Deixe vazio para a dica padrao'
+  ['Leave empty for no line']='Deixe vazio para nao mostrar nenhuma linha'
   # --- password field (campo de senha) ---
   ['password field']='campo de senha'
   ['corner style']='estilo dos cantos'
@@ -612,7 +627,6 @@ load_pt(){ PT=(
   ['near the bottom']='perto do rodape'
   ['none']='nenhuma'
   # --- SDDM login theme (tela de inicio) ---
-  ['theme']='tema'
   ['active now']='ativo agora'
   ['about']='sobre'
   ['no preview image']='sem imagem de previa'
@@ -626,32 +640,239 @@ load_pt(){ PT=(
   ['arrows preview · ENTER apply (asks password) · ESC cancel']='setas previa · ENTER aplica (pede senha) · ESC cancela'
   ['now']='agora'
   ['login screen theme (SDDM), like picking a wallpaper']='tema da tela de login (SDDM), como escolher um wallpaper'
+  # --- network / system modules (rede / sistema) ---
+  ['/etc/sddm.conf sets Current= itself and overrides the theme chosen here; remove that line (as root) for the choice to take effect']='o /etc/sddm.conf define Current= e sobrepoe o tema escolhido aqui; remova essa linha (como root) para a escolha valer'
+  ['DNS only']='somente DNS'
+  ['DNS set']='DNS definido'
+  ['DNS, space-separated']='DNS, separados por espaco'
+  ['DNS, space-separated (optional)']='DNS, separados por espaco (opcional)'
+  ['ENTER connects · saved networks can be forgotten']='ENTER conecta · redes salvas podem ser esquecidas'
+  ['ENTER deletes the saved profile (password included)']='ENTER apaga o perfil salvo (senha inclusa)'
+  ['ENTER toggles up/down']='ENTER liga/desliga'
+  ['IP/prefix (e.g. 192.168.1.50/24)']='IP/prefixo (ex.: 192.168.1.50/24)'
+  ['NetworkManager (nmcli) not found']='NetworkManager (nmcli) nao encontrado'
+  ['Portuguese Brazil, ABNT2 (no variant)']='Portugues Brasil, ABNT2 (sem variante)'
+  ['US English']='Ingles EUA'
+  ['VLAN created']='VLAN criada'
+  ['VLAN id (1-4094)']='id da VLAN (1-4094)'
+  ['VPN / tunnels']='VPN / tuneis'
+  ['VPN and tunnels']='VPN e tuneis'
+  ['VPN down']='VPN desligada'
+  ['VPN up']='VPN ligada'
+  ['Waybar config not found']='configuracao do Waybar nao encontrada'
+  ['Wi-Fi networks']='redes Wi-Fi'
+  ['Wi-Fi, VPN, fixed IP, hostname, status']='Wi-Fi, VPN, IP fixo, nome da maquina, status'
+  ['Wi-Fi: scan, connect, forget']='Wi-Fi: procurar, conectar, esquecer'
+  ['advanced editor (nm-connection-editor)']='editor avancado (nm-connection-editor)'
+  ['apply a random palette']='aplica uma paleta aleatoria'
+  ['argument']='argumento'
+  ['automatic (DHCP)']='automatico (DHCP)'
+  ['background']='fundo'
+  ['blur']='desfoque'
+  ['command']='comando'
+  ['connect']='conectar'
+  ['connected']='conectado'
+  ['connection']='conexao'
+  ['create a VLAN']='criar uma VLAN'
+  ['current hostname']='nome atual da maquina'
+  ['detailed status']='status detalhado'
+  ['failed']='falhou'
+  ['failed (check the values)']='falhou (confira os valores)'
+  ['failed (needs sudo)']='falhou (precisa de sudo)'
+  ['failed to connect']='falha ao conectar'
+  ['failed to create the VLAN']='falha ao criar a VLAN'
+  ['fixed IP set']='IP fixo definido'
+  ['fixed IP, DNS, VLAN']='IP fixo, DNS, VLAN'
+  ['forget a saved network…']='esquecer uma rede salva…'
+  ['forget this network']='esquecer esta rede'
+  ['forget which network']='esquecer qual rede'
+  ['forgotten']='esquecida'
+  ['fzf is required for the menus — install it (e.g. sudo pacman -S fzf), or use: hyprism <palette>']='o fzf e necessario para os menus — instale (ex.: sudo pacman -S fzf), ou use: hyprism <paleta>'
+  ['gateway (optional)']='gateway (opcional)'
+  ['height and position of the bar']='altura e posicao da barra'
+  ['hostname set to']='nome da maquina definido como'
+  ['list the palettes']='lista as paletas'
+  ['machine name']='nome da maquina'
+  ['manual: IP / gateway / DNS']='manual: IP / gateway / DNS'
+  ['network']='rede'
+  ['network, sound, bluetooth, displays']='rede, som, bluetooth, monitores'
+  ['new hostname (empty to cancel)']='novo nome da maquina (vazio cancela)'
+  ['nmcli not found']='nmcli nao encontrado'
+  ['nmcli not found; opening the legacy net-tui']='nmcli nao encontrado; abrindo o net-tui antigo'
+  ['no bluetooth tool found (install blueman)']='nenhuma ferramenta de bluetooth (instale o blueman)'
+  ['no display tool found (install nwg-displays)']='nenhuma ferramenta de monitores (instale o nwg-displays)'
+  ['no presets yet']='nenhum preset ainda'
+  ['no sound tool found (install pavucontrol)']='nenhuma ferramenta de som (instale o pavucontrol)'
+  ['open the visual center (visualconf); built-in menu if it is missing']='abre a central visual (visualconf); o menu embutido se ela faltar'
+  ['pair and manage devices']='parear e gerenciar dispositivos'
+  ['parent device']='dispositivo pai'
+  ['password for']='senha de'
+  ['pick a palette with a live preview']='escolher uma paleta com previa ao vivo'
+  ['position and resolution']='posicao e resolucao'
+  ['preset not found']='preset nao encontrado'
+  ['print the version']='mostra a versao'
+  ['regenerate every file from the current state']='regera todos os arquivos a partir do estado atual'
+  ['regenerate the palettes from the kitty themes']='regera as paletas a partir dos temas do kitty'
+  ['same as no argument']='o mesmo que sem argumento'
+  ['saved on']='salvo em'
+  ['set to DHCP']='definido como DHCP'
+  ['show this help']='mostra esta ajuda'
+  ['system']='sistema'
+  ['usage']='uso'
+  ['user preset']='preset do usuario'
+  ['volume, inputs and outputs']='volume, entradas e saidas'
+  ['★ built-in · ENTER applies (only the keys the preset lists)']='★ embutido · ENTER aplica (so as chaves que o preset lista)'
 ); }
 lang_init(){ LANGX=$(sget lang); case "$LANGX" in pt|en) ;; *) LANGX=en ;; esac
   [ "$LANGX" = pt ] && declare -F load_pt >/dev/null && load_pt; return 0; }
 
 usage(){
-  printf '%s\n' "$(t 'Hyprism — one palette, the whole spectrum.')"
+  u(){ printf '  %-46s %s\n' "$1" "$2"; }
+  printf '%s\n\n' "$(t 'Hyprism — one palette, the whole spectrum.')"
+  printf '%s\n' "$(t 'usage'): hyprism [$(t 'command')] [$(t 'argument')]"
   printf '\n'
-  printf '  hyprism                 %s\n' "$(t 'open the full menu')"
-  printf '  hyprism <palette>       %s\n' "$(t 'apply a palette directly')"
-  printf '  hyprism palette|wallpaper|appearance|effects|bar|style|modules\n'
-  printf '  hyprism windows|workspaces|animations|input|cursor\n'
-  printf '  hyprism lock|notifications|font|binds|preset|config\n'
-  printf '  hyprism style [flat|pills|segmented]\n'
-  printf '  hyprism lang [en|pt]    %s\n' "$(t 'switch the interface language')"
-  printf '  hyprism sync            %s\n' "$(t 'reapply the global theme to Kitty and Rofi')"
-  printf '  hyprism -l  -r  -g  -h   %s\n' "$(t 'list, random, regenerate palettes, help')"
+  u 'hyprism'                                    "$(t 'open the visual center (visualconf); built-in menu if it is missing')"
+  u 'hyprism menu'                               "$(t 'same as no argument')"
+  u 'hyprism <palette>'                          "$(t 'apply a palette directly')"
+  printf '\n'
+  u 'palette'                                    "$(t 'pick a palette with a live preview')"
+  u 'wallpaper'                                  "$(t 'wallpaper, with a terminal preview')"
+  u 'appearance'                                 "$(t 'border width, corners and spacing')"
+  u 'borders'                                    "$(t 'window border color')"
+  u 'effects [performance|subtle|glass|focus]'   "$(t 'blur, shadow, opacity and focus')"
+  u 'animations [off|fast|balanced|smooth|elastic]' "$(t 'presets for windows, layers and workspaces')"
+  u 'bar'                                        "$(t 'height and position of the bar')"
+  u 'style [flat|pills|segmented]'               "$(t 'bar look: flat / pills / segmented + tuning')"
+  u 'modules'                                    "$(t 'what appears on the bar, item by item')"
+  u 'windows'                                    "$(t 'opening, layout, snapping and focus')"
+  u 'workspaces'                                 "$(t 'count, rules, layout and navigation')"
+  u 'input'                                      "$(t 'keyboard, mouse, touchpad and gestures')"
+  u 'cursor'                                     "$(t 'theme, size and when to hide')"
+  u 'lock'                                       "$(t 'background, clock and cursor of hyprlock')"
+  u 'sddm | login'                               "$(t 'login screen theme (SDDM), like picking a wallpaper')"
+  u 'notifications'                              "$(t 'position, size, timeout and icons')"
+  u 'network'                                    "$(t 'Wi-Fi, VPN, fixed IP, hostname, status')"
+  u 'system'                                     "$(t 'network, sound, bluetooth, displays')"
+  u 'font'                                       "$(t 'family and size of the bar')"
+  u 'binds'                                      "$(t 'see the keybinding list')"
+  u 'preset [list|<name>]'                       "$(t 'save or load a whole look')"
+  u 'config'                                     "$(t 'see everything active')"
+  u 'lang [en|pt]'                               "$(t 'switch the interface language')"
+  u 'sync'                                       "$(t 'reapply the global theme to Kitty and Rofi')"
+  u 'render'                                     "$(t 'regenerate every file from the current state')"
+  printf '\n'
+  u '-l, --list'                                 "$(t 'list the palettes')"
+  u '-r, --random'                               "$(t 'apply a random palette')"
+  u '-g, --generate'                             "$(t 'regenerate the palettes from the kitty themes')"
+  u '-V, --version'                              "$(t 'print the version')"
+  u '-h, --help'                                 "$(t 'show this help')"
+  unset -f u
+}
+
+version(){
+  local v; v=$(cat "$HYPRISM_ROOT/VERSION" 2>/dev/null)
+  printf 'hyprism %s\n' "${v:-unknown}"
 }
 
 # ---------- state ----------
 sget(){ grep -m1 "^$1=" "$SET" 2>/dev/null | cut -d= -f2-; }
-sset(){ local k="$1" v="$2"; touch "$SET"
-  if grep -q "^$k=" "$SET" 2>/dev/null; then
-    sed -i "s|^$k=.*|$k=$v|" "$SET"
-  else printf '%s=%s\n' "$k" "$v" >> "$SET"; fi; }
-def(){ [ -z "$(sget "$1")" ] && sset "$1" "$2"; return 0; }
+# Writes/removes one key. Values go through the environment (never through a
+# sed/awk program or awk -v, which would interpret & | \ and escapes). The file
+# is rewritten atomically (tmp + mv), or written through when it is a symlink.
+_state_write(){  # _state_write MODE(set|del) KEY [VALUE]
+  local tmp
+  [ -e "$SET" ] || : > "$SET"
+  tmp=$(mktemp "$TD/.state.XXXXXX") || return 1
+  HK="$2" HV="${3:-}" HM="$1" awk '
+    BEGIN { k = ENVIRON["HK"]; v = ENVIRON["HV"]; m = ENVIRON["HM"]; n = length(k) + 1; done = 0 }
+    substr($0, 1, n) == k "=" { if (m == "set" && !done) print k "=" v; done = 1; next }
+    { print }
+    END { if (m == "set" && !done) print k "=" v }
+  ' "$SET" > "$tmp" || { rm -f "$tmp"; return 1; }
+  _state_commit "$tmp"
+}
+_state_commit(){  # replace .state with the finished temp file $1
+  if [ -L "$SET" ]; then
+    cat "$1" > "$SET"; rm -f "$1"
+  else
+    chmod --reference="$SET" "$1" 2>/dev/null || chmod 644 "$1"
+    mv -f "$1" "$SET"
+  fi
+}
+# Merges a file of key=value lines into .state in one pass: listed keys get the
+# new value, every other key is kept untouched, new keys are appended.
+_state_merge(){
+  local tmp
+  [ -e "$SET" ] || : > "$SET"
+  tmp=$(mktemp "$TD/.state.XXXXXX") || return 1
+  awk '
+    NR == FNR { i = index($0, "="); if (i > 1) { k = substr($0, 1, i - 1)
+                  if (!(k in val)) order[++n] = k; val[k] = substr($0, i + 1) }; next }
+    { i = index($0, "=")
+      if (i > 1) { k = substr($0, 1, i - 1)
+        if (k in val) { if (!(k in done)) { print k "=" val[k]; done[k] = 1 }; next } }
+      print }
+    END { for (j = 1; j <= n; j++) { k = order[j]; if (!(k in done)) print k "=" val[k] } }
+  ' "$1" "$SET" > "$tmp" || { rm -f "$tmp"; return 1; }
+  _state_commit "$tmp"
+}
+sset(){ local v="${2-}"; v=${v//$'\n'/ }; _state_write set "$1" "$v"; }
+sdel(){ grep -q "^$1=" "$SET" 2>/dev/null || return 0; _state_write del "$1"; }
+# Default only when the key does not exist at all: an empty value is a valid,
+# deliberate choice (e.g. kb_variant=). seed() preloads the existing keys so
+# checking ~100 defaults does not fork one grep per key.
+declare -A SEEN=()
+seen_load(){ SEEN=(); local k _v
+  [ -f "$SET" ] || return 0
+  while IFS='=' read -r k _v; do [ -n "$k" ] && SEEN[$k]=1; done < "$SET"; }
+def(){ [ -n "${SEEN[$1]+x}" ] && return 0
+  grep -q "^$1=" "$SET" 2>/dev/null || sset "$1" "$2"; SEEN[$1]=1; }
+# Like def, but the default comes from a function, run only when needed.
+defl(){ [ -n "${SEEN[$1]+x}" ] && return 0
+  grep -q "^$1=" "$SET" 2>/dev/null || sset "$1" "$("$2")"; SEEN[$1]=1; }
+
+# ---------- system-derived defaults ----------
+has_battery(){ compgen -G '/sys/class/power_supply/BAT*' >/dev/null; }
+has_backlight(){ compgen -G '/sys/class/backlight/*' >/dev/null; }
+has_touchpad(){
+  if have hyprctl && hyprctl devices -j 2>/dev/null | grep -qi 'touchpad'; then return 0; fi
+  grep -qi 'touchpad' /proc/bus/input/devices 2>/dev/null
+}
+sys_kb_layout(){
+  local l=""
+  have localectl && l=$(localectl status 2>/dev/null | awk -F': *' '/X11 Layout/{print $2; exit}')
+  l=${l// /}
+  printf '%s' "${l:-us}"
+}
+cursor_exists(){
+  local d
+  for d in "$HOME/.local/share/icons" "$HOME/.icons" /usr/share/icons; do
+    [ -d "$d/$1/cursors" ] && return 0
+  done
+  return 1
+}
+sys_cursor(){
+  local c
+  for c in "${HYPRCURSOR_THEME:-}" "${XCURSOR_THEME:-}" \
+           "$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null | tr -d "'")"; do
+    [ -n "$c" ] && cursor_exists "$c" && { printf '%s' "$c"; return 0; }
+  done
+  printf 'Adwaita'
+}
+sys_barfont(){
+  local f
+  if have fc-list; then
+    for f in "FiraCode Nerd Font Mono" "JetBrainsMono Nerd Font" "Symbols Nerd Font"; do
+      fc-list -q ":family=$f" 2>/dev/null && { printf '%s' "$f"; return 0; }
+    done
+  fi
+  printf 'monospace'
+}
+hw_battery_default(){ has_battery && echo on || echo off; }
+hw_backlight_default(){ has_backlight && echo on || echo off; }
+
 seed(){
+  seen_load
   def border 1;         def rounding 0;    def rounding_power 2.0
   def gaps_in 2;        def gaps_out 4
   def blur off;         def blur_size 6;   def blur_passes 2
@@ -669,15 +890,15 @@ seed(){
   def workspace_smart_gaps nao; def workspace_layout global
   def workspace_gap 0;  def workspace_wrap nao; def workspace_backforth sim
   def bar_enabled on;   def barh 26;       def barpos bottom
-  def barfont "FiraCode Nerd Font Mono"; def barsize 12
+  defl barfont sys_barfont; def barsize 12
   def bar_style flat;   def bar_margin 0;  def bar_radius 0;  def bar_gap 0
   def lang en
-  def kb_layout br;     def kb_variant thinkpad
+  defl kb_layout sys_kb_layout; def kb_variant ""
   def follow_mouse 1;   def mouse_sensitivity 0; def mouse_scroll 1.0
   def mouse_natural nao
   def touch_natural sim; def touch_tap sim; def touch_dwt sim
   def touch_scroll 1.0; def gesture_fingers 3
-  def cursor_theme aosp-cursors; def cursor_size 24
+  defl cursor_theme sys_cursor; def cursor_size 24
   def cursor_hide_key nao; def cursor_timeout 0
   def lock_blur 3;      def lock_brightness 50
   def lock_clock sim;   def lock_hide_cursor sim
@@ -697,13 +918,18 @@ seed(){
     *) sset anim rapida ;;
   esac
 
+  # The old border_active knob was never read (the active border is the
+  # accent); drop it from existing states.
+  [ -n "${SEEN[border_active]+x}" ] && sdel border_active
+
   # Current bar modules. The first two stay off to preserve the look without
-  # a launcher/workspace number, as requested.
+  # a launcher/workspace number. Battery/backlight default on only when the
+  # hardware exists.
   def bar_launcher off; def bar_workspaces off; def bar_window on
   def bar_media on;     def bar_language on;     def bar_idle on
   def bar_temperature on; def bar_disk on;       def bar_memory on
-  def bar_cpu on;       def bar_backlight on;    def bar_audio on
-  def bar_network on;   def bar_tray off;        def bar_battery on
+  def bar_cpu on;       defl bar_backlight hw_backlight_default; def bar_audio on
+  def bar_network on;   def bar_tray off;        defl bar_battery hw_battery_default
   def bar_clock on;     def bar_power on
   return 0
 }
@@ -774,7 +1000,41 @@ gen_palettes(){
 }
 
 palettes(){ find "$PAL" -maxdepth 1 -name '*.env' -printf '%f\n' 2>/dev/null | sed 's/\.env$//' | sort; }
-loadpal(){ set -a; . "$PAL/$1.env"; set +a; }
+# A hand-made palette may define only some colors: derive the missing ones so
+# no generator ever expands an unset variable (set -u would abort).
+pal_fill(){
+  : "${bg:=#000000}" "${fg:=#cccccc}"
+  : "${accent:=${accent_lit:-#888888}}"
+  [ -n "${bg2:-}" ]  || bg2=$(mix "$fg" "$bg" 6)
+  [ -n "${dim:-}" ]  || dim=$(mix "$fg" "$bg" 45)
+  [ -n "${line:-}" ] || line=$(mix "$fg" "$bg" 16)
+  [ -n "${sel:-}" ]  || sel=$(mix "$accent" "$bg" 18)
+  if [ -z "${accent_lit:-}" ]; then
+    if is_dark "$bg"; then accent_lit=$(mix "$accent" "#ffffff" 70)
+    else                   accent_lit=$(mix "$accent" "#000000" 72); fi
+  fi
+  if [ -z "${on_accent:-}" ]; then
+    if is_dark "$bg"; then on_accent="#ffffff"; else on_accent="#111111"; fi
+  fi
+  export bg bg2 fg dim line accent accent_lit sel on_accent
+}
+# shellcheck source=/dev/null
+loadpal(){ unset bg bg2 fg dim line accent accent_lit sel on_accent
+  [ -f "$PAL/$1.env" ] && { set -a; . "$PAL/$1.env"; set +a; }; pal_fill; }
+# The palette to use: the requested/active one, else sddm-terminal-red, else
+# the first palette found, else freshly generated ones. Never a missing file.
+pal_resolve(){
+  local name="${1:-}" f
+  [ -n "$name" ] && [ -f "$PAL/$name.env" ] && { printf '%s' "$name"; return 0; }
+  [ -f "$PAL/sddm-terminal-red.env" ] && { printf 'sddm-terminal-red'; return 0; }
+  f=$(palettes | head -1)
+  if [ -z "$f" ]; then gen_palettes >/dev/null 2>&1; f=$(palettes | head -1); fi
+  [ -n "$f" ] && { printf '%s' "$f"; return 0; }
+  return 1
+}
+active_pal(){ pal_resolve "$(cat "$STATE" 2>/dev/null)"; }
+# One color of the active palette (with the pal_fill defaults), no side effects.
+pal_get(){ ( loadpal "$(active_pal)" 2>/dev/null; printf '%s' "${!1:-}" ); }
 
 # ---------- generators ----------
 onoff(){ [ "$1" = "on" ] && echo true || echo false; }
@@ -853,8 +1113,10 @@ EOF
 }
 
 gen_colors(){
+  # Active border = the accent (already adjusted by apply_accent: manual color
+  # from the Borders menu + brightness). Inactive = border_inactive or line.
   local ba bi
-  ba="$accent"                              # ja veio ajustado por apply_accent
+  ba="$accent"
   bi=$(sget border_inactive); [ -z "$bi" ] && bi="$line"
 
   cat > "$COLORS" <<EOF
@@ -870,7 +1132,7 @@ return {
     accent     = "$accent",
     accent_lit = "$accent_lit",
     sel        = "$sel",
-    on_accent  = "$on_accent",
+    on_accent  = "${on_accent:-#ffffff}",
 
     -- window borders (hyprism appearance)
     border_active   = "$ba",
@@ -886,8 +1148,12 @@ EOF
 # (floating, one rounded chip per module) and 'segmented' (attached, rounded
 # module clusters). Margin/radius/gap are user knobs read from .state.
 gen_waybar(){
-  local style margin radius gap
+  local style margin radius gap edge
   style=$(sget bar_style); case "$style" in flat|pills|segmented) ;; *) style=flat ;; esac
+  # The accent rule sits on the edge facing the windows.
+  case "$(sget barpos)" in
+    top) edge=bottom ;; left) edge=right ;; right) edge=left ;; *) edge=top ;;
+  esac
   margin=$(sget bar_margin); [ -z "$margin" ] && margin=0
   radius=$(sget bar_radius); [ -z "$radius" ] && radius=0
   gap=$(sget bar_gap);       [ -z "$gap" ]    && gap=0
@@ -906,7 +1172,7 @@ EOF
 
   case "$style" in
   flat) cat <<EOF
-window#waybar { background: @bg; color: @fg; border-top: 1px solid @accent; }
+window#waybar { background: @bg; color: @fg; border-${edge}: 1px solid @accent; }
 
 #custom-launcher, #workspaces, #window, #tray, #pulseaudio, #network,
 #cpu, #memory, #backlight, #battery, #clock, #temperature, #disk,
@@ -992,7 +1258,7 @@ EOF
   ;;
   segmented) cat <<EOF
 /* Segmented: solid bar with rounded module clusters */
-window#waybar { background: @bg; color: @fg; border-top: 1px solid @accent; margin: 0 ${margin}px; }
+window#waybar { background: @bg; color: @fg; border-${edge}: 1px solid @accent; margin: 0 ${margin}px; }
 .modules-left, .modules-center, .modules-right {
     background: @bg2; border-radius: ${radius}px; margin: 4px ${gap}px; padding: 0 4px;
 }
@@ -1043,7 +1309,7 @@ waybar_list(){
 }
 
 gen_waybar_layout(){
-  local cfg="$WBAR/config.jsonc" tmp left center right
+  local cfg="$WBAR/config.jsonc" tmp left center right h p
   [ -f "$cfg" ] || return 0
   left=$(waybar_list \
     bar_launcher custom/launcher bar_workspaces hyprland/workspaces \
@@ -1054,38 +1320,68 @@ gen_waybar_layout(){
     bar_temperature temperature bar_disk disk bar_memory memory bar_cpu cpu \
     bar_backlight backlight bar_audio pulseaudio bar_network network \
     bar_tray tray bar_battery battery bar_clock clock bar_power custom/power)
+  # Height and position live in .state too, so render/presets restore them.
+  h=$(sget barh);   case "$h" in ''|*[!0-9]*|0) h="" ;; esac
+  p=$(sget barpos); case "$p" in top|bottom|left|right) ;; *) p="" ;; esac
 
-  tmp=$(mktemp "$WBAR/.config.jsonc.XXXXXX") || return 1
-  awk -v left="$left" -v center="$center" -v right="$right" '
-    function replacement(name, value) {
-      printf "  \"modules-%s\": [%s],\n", name, value
+  # Only top-level keys (brace depth 1) are touched, so a "height" or a
+  # "modules-*" inside a module/group definition is left alone. A module list
+  # ends at "]" with an optional "," and/or // comment; the original comma (or
+  # its absence) is preserved.
+  tmp=$(mktemp "${TMPDIR:-/tmp}/hyprism-waybar.XXXXXX") || return 1
+  HL="$left" HC="$center" HR="$right" HH="$h" HP="$p" awk '
+    BEGIN { L = ENVIRON["HL"]; C = ENVIRON["HC"]; R = ENVIRON["HR"]
+            H = ENVIRON["HH"]; P = ENVIRON["HP"]; depth = 0; skip = 0 }
+    function braces(line,   t, o) {
+      t = line; gsub(/"([^"\\]|\\.)*"/, "", t); sub(/\/\/.*/, "", t)
+      o = gsub(/\{/, "", t); return o - gsub(/\}/, "", t)
     }
-    skip {
-      if ($0 ~ /],[[:space:]]*$/) skip=0
+    function listend(line) { return line ~ /\][[:space:]]*,?[[:space:]]*(\/\/.*)?$/ }
+    function emit(line) {
+      printf "%s\"modules-%s\": [%s]%s\n", ind, name, val, (line ~ /\][[:space:]]*,/) ? "," : ""
+    }
+    skip { if (listend($0)) { emit($0); skip = 0 }; next }
+    depth == 1 && /^[[:space:]]*"modules-(left|center|right)"[[:space:]]*:/ {
+      ind = $0;  sub(/[^[:space:]].*/, "", ind)
+      name = $0; sub(/^[[:space:]]*"modules-/, "", name); sub(/".*/, "", name)
+      val = (name == "left") ? L : (name == "center") ? C : R
+      if (listend($0)) emit($0); else skip = 1
       next
     }
-    /^[[:space:]]*"modules-left"[[:space:]]*:/ {
-      replacement("left", left)
-      if ($0 !~ /],[[:space:]]*$/) skip=1
-      next
-    }
-    /^[[:space:]]*"modules-center"[[:space:]]*:/ {
-      replacement("center", center)
-      if ($0 !~ /],[[:space:]]*$/) skip=1
-      next
-    }
-    /^[[:space:]]*"modules-right"[[:space:]]*:/ {
-      replacement("right", right)
-      if ($0 !~ /],[[:space:]]*$/) skip=1
-      next
-    }
-    { print }
-  ' "$cfg" > "$tmp" && chmod 644 "$tmp" && mv "$tmp" "$cfg"
+    depth == 1 && H != "" && /^[[:space:]]*"height"[[:space:]]*:/ { sub(/:[[:space:]]*[0-9]+/, ": " H) }
+    depth == 1 && P != "" && /^[[:space:]]*"position"[[:space:]]*:/ { sub(/:[[:space:]]*"[a-z]*"/, ": \"" P "\"") }
+    { print; depth += braces($0) }
+  ' "$cfg" > "$tmp" && [ -s "$tmp" ] || { rm -f "$tmp"; return 1; }
+  # Write through (keeps a symlinked config.jsonc and its permissions).
+  cmp -s "$tmp" "$cfg" || cat "$tmp" > "$cfg"
+  rm -f "$tmp"
+}
+
+# A still image hyprlock can show for PATH: the file itself, or — for an
+# animated wallpaper (gif/video) — a cached first frame. Prints nothing and
+# fails when no usable image exists.
+still_of(){
+  local f="${1:-}" ext key
+  [ -n "$f" ] && [ -f "$f" ] || return 1
+  ext="${f##*.}"; ext="${ext,,}"
+  case "$ext" in
+    gif|mp4|webm|mkv|mov|avi)
+      key="$THUMBS/lock_$(printf '%s' "$f" | md5sum | cut -c1-16).png"
+      if [ ! -s "$key" ] || [ "$f" -nt "$key" ]; then
+        if have ffmpeg; then
+          ffmpeg -y -loglevel error -i "$f" -frames:v 1 "$key" </dev/null >/dev/null 2>&1
+        elif have magick; then
+          magick "${f}[0]" "$key" </dev/null >/dev/null 2>&1
+        fi
+      fi
+      [ -s "$key" ] || return 1
+      printf '%s' "$key" ;;
+    *) printf '%s' "$f" ;;
+  esac
 }
 
 gen_hyprlock(){
-  local wall; wall=$(cat "$WALLFILE" 2>/dev/null)
-  [ -f "$wall" ] || wall="$WALLDIR/gruvbox_forest-4.png"
+  local wall; wall=$(still_of "$(cat "$WALLFILE" 2>/dev/null)") || wall=""
   local a="${accent#\#}" b="${bg#\#}" f="${fg#\#}" d="${dim#\#}" s="${sel#\#}" l="${accent_lit#\#}"
   local bg2="${bg2#\#}" line="${line#\#}"
   local brightness datefmt lockfont
@@ -1113,19 +1409,15 @@ gen_hyprlock(){
 
   # --- background: follow the wallpaper (default), a dedicated image, or a
   #     solid palette color. Image falls back to the wallpaper if it vanished.
-  local bg_block src
+  #     With no usable image at all, the solid color is used.
+  local bg_block src=""
   case "$(sget lock_bg)" in
-    color)
-      bg_block=$(cat <<EOF
-background {
-    monitor =
-    color = rgba(${b}ff)
-}
-EOF
-) ;;
-    image)
-      src=$(sget lock_bg_image); [ -f "$src" ] || src="$wall"
-      bg_block=$(cat <<EOF
+    color) src="" ;;
+    image) src=$(still_of "$(sget lock_bg_image)") || src="$wall" ;;
+    *)     src="$wall" ;;
+  esac
+  if [ -n "$src" ]; then
+    bg_block=$(cat <<EOF
 background {
     monitor =
     path = $src
@@ -1136,21 +1428,16 @@ background {
     vibrancy = 0.15
 }
 EOF
-) ;;
-    *)
-      bg_block=$(cat <<EOF
+)
+  else
+    bg_block=$(cat <<EOF
 background {
     monitor =
-    path = $wall
-    blur_passes = $(sget lock_blur)
-    blur_size = 7
-    brightness = $brightness
-    contrast = 0.9
-    vibrancy = 0.15
+    color = rgba(${b}ff)
 }
 EOF
-) ;;
-  esac
+)
+  fi
 
   # --- clock: size, color (text/accent/light accent) and 24h/12h format ---
   local clock_labels="" clockcol clockfmt
@@ -1256,7 +1543,7 @@ EOF
 
   cat > "$HD/hyprlock.conf" <<EOF
 # Generated by Hyprism — palette $1. Do not edit by hand.
-# Customize it from Hyprism: 'hyprism bloqueio' (or the Lock screen menu).
+# Customize it from Hyprism: 'hyprism lock' (or the Lock screen menu).
 # A clean, centered lock: background, an optional accent frame, a clock, an
 # optional avatar, a pill input field and a bottom line.
 general {
@@ -1365,20 +1652,30 @@ gen_dunst(){
 EOF
 }
 
-restart_bar(){ pkill waybar >/dev/null 2>&1
+restart_bar(){
+  have waybar || return 0
+  pkill -x waybar >/dev/null 2>&1
   [ "$(sget bar_enabled)" = "on" ] || return 0
   sleep 0.4
   setsid waybar >/dev/null 2>&1 < /dev/null & }
-restart_dunst(){ pkill dunst >/dev/null 2>&1; sleep 0.2
+# Only (re)start dunst when it is the notification daemon in use: never fight
+# mako or swaync for the notification bus.
+restart_dunst(){
+  have dunst || return 0
+  pgrep -x mako >/dev/null 2>&1 && return 0
+  pgrep -x swaync >/dev/null 2>&1 && return 0
+  pkill -x dunst >/dev/null 2>&1; sleep 0.2
   setsid dunst >/dev/null 2>&1 < /dev/null & }
 
 # Applies a wallpaper without persisting state. Used by the FZF live preview.
 # Delegates to set-wallpaper, which picks swaybg or mpvpaper depending on
 # whether the file is still or animated.
 apply_wall_now(){
-  local wall="$1"
+  local wall="$1" sw
   [ -f "$wall" ] || return 1
-  "$HOME/.local/bin/set-wallpaper" "$wall" >/dev/null 2>&1
+  sw=$(command -v set-wallpaper 2>/dev/null) || sw="$HYPRISM_ROOT/bin/set-wallpaper"
+  [ -x "$sw" ] || return 1
+  "$sw" "$wall" >/dev/null 2>&1
 }
 
 # The FZF preview must respond instantly. Previously each move waited for
@@ -1457,54 +1754,10 @@ sync_rofi(){
   return 0
 }
 
-# jgmenu theme (the desktop right-click app menu), generated from the active
-# palette on every render so it follows the system profile — the SAME accent/
-# border the visual center applies to windows. Compact, text-only, fluxbox-like.
-gen_jgmenu(){
-  local dir="$HOME/.config/jgmenu"; mkdir -p "$dir"
-  local onacc="${on_accent:-#ffffff}"
-  cat > "$dir/jgmenurc" <<EOF
-# Generated by Hyprism — do not edit by hand. Follows the active palette
-# (same accent/border as the windows). Compact, text-only, fluxbox-style.
-stay_alive        = 0
-tint2_look        = 0
-position_mode     = pointer
-menu_width        = 178
-menu_padding_top  = 0
-menu_padding_right = 0
-menu_padding_bottom = 0
-menu_padding_left = 0
-menu_margin_x     = 0
-menu_margin_y     = 0
-menu_radius       = 0
-menu_border       = 1
-menu_valign       = top
-menu_halign       = left
-item_height       = 16
-item_padding_x    = 4
-item_margin_x     = 0
-item_margin_y     = 0
-item_radius       = 0
-sep_height        = 2
-sep_markup        = 0
-icon_size         = 0
-font              = FiraCode Nerd Font Mono 9
-arrow_string      = ▸
-color_menu_bg     = ${bg} 100
-color_menu_border = ${accent} 100
-color_norm_bg     = ${bg} 0
-color_norm_fg     = ${fg} 100
-color_sel_bg      = ${sel} 100
-color_sel_fg      = ${onacc} 100
-color_sep_fg      = ${line} 100
-color_scroll_ind  = ${accent} 100
-EOF
-}
-
 render(){
   seed
-  local name; name=$(cat "$STATE" 2>/dev/null)
-  [ -f "$PAL/$name.env" ] || name="sddm-terminal-red"
+  local name
+  name=$(active_pal) || { err "$(t 'no palette')"; return 1; }
   loadpal "$name"
   apply_accent
   gen_look
@@ -1513,7 +1766,6 @@ render(){
   gen_waybar_layout
   gen_hyprlock "$name"
   gen_dunst    "$name"
-  gen_jgmenu
   if have hyprctl; then
     hyprctl reload >/dev/null 2>&1
     hyprctl setcursor "$(sget cursor_theme)" "$(sget cursor_size)" >/dev/null 2>&1
@@ -1531,7 +1783,6 @@ apply(){
   # explicitly, from the Borders menu.
   sset accent_override ""
   sset accent_bright 100
-  sset border_active ""
   sset border_inactive ""
   printf '%s\n' "$1" > "$STATE"
   render
@@ -1540,8 +1791,8 @@ apply(){
 
 # ---------- preview ----------
 preview(){
-  local p="$PAL/$1.env"; [ -f "$p" ] || { echo "$(t 'no palette')"; return; }
-  ( set -a; . "$p"; set +a
+  local p="$PAL/$1.env"; [ -f "$p" ] || { t 'no palette'; echo; return; }
+  ( loadpal "$1"
     local src; src=$(grep -m1 -E '^# (origem|source):' "$p" | sed -E 's/^# (origem|source): //')
     printf '%-8s %s\n' "$(t 'palette')" "$1"
     [ -n "$src" ] && printf '%-8s %s\n' "$(t 'source')" "$src"
@@ -1550,7 +1801,7 @@ preview(){
     printf '%s%s ┌─ %s %*s%s\n' "$B" "$(afg "$accent")" "$(t 'active window')" $((W-16)) '' "$Z"
     printf '%s%s │ %s%-*s%s\n' "$B" "$(afg "$accent")" "$(afg "$fg")"  $((W-4)) "$(t 'normal text')" "$Z"
     printf '%s%s │ %s%-*s%s\n' "$B" "$(afg "$accent")" "$(afg "$dim")" $((W-4)) "$(t 'dim text')" "$Z"
-    printf '%s%s%-*s%s\n' "$(abg "$sel")" "$(afg "$on_accent")" "$W" " $(t 'selected item')" "$Z"
+    printf '%s%s%-*s%s\n' "$(abg "$sel")" "$(afg "${on_accent:-#ffffff}")" "$W" " $(t 'selected item')" "$Z"
     printf '%s%s%-*s%s\n' "$(abg "$bg2")" "$(afg "$accent_lit")" "$W" " $(t 'bar / highlight')" "$Z"
     printf '\n'
     printf '%s    %s bg        %s\n' "$(abg "$bg")" "$Z" "$bg"
@@ -1644,41 +1895,24 @@ wall_find(){
     -printf '%f\n' | sort
 }
 
-# Keep hyprpaper.conf in sync with the chosen wallpaper so a fresh login that
-# happens to start hyprpaper shows the right image (the live daemon is swaybg,
-# driven by set-wallpaper, but the two configs no longer disagree).
-write_hyprpaper(){
-  local wall="$1" conf="$HD/hyprpaper.conf" outs o
-  # Parse the plain output ("Monitor eDP-1 (ID 0):"), not -j: the JSON also has
-  # a "name" field on workspaces, which would pollute the monitor list.
-  outs=""
-  have hyprctl && outs=$(hyprctl monitors 2>/dev/null | awk '/^Monitor /{print $2}')
-  {
-    printf 'preload = %s\n' "$wall"
-    if [ -n "$outs" ]; then
-      while read -r o; do [ -n "$o" ] && printf 'wallpaper = %s,%s\n' "$o" "$wall"; done <<<"$outs"
-    else
-      printf 'wallpaper = ,%s\n' "$wall"
-    fi
-    printf 'splash = false\nipc = on\n'
-  } > "$conf"
-}
-
 pick_wallpaper(){
+  mkdir -p "$WALLDIR" 2>/dev/null
   [ -d "$WALLDIR" ] || { err "$(t 'folder not found'): $WALLDIR"; return 1; }
-  local old sel clip; old=$(cat "$WALLFILE" 2>/dev/null)
+  local old sel clip qdir qself; old=$(cat "$WALLFILE" 2>/dev/null)
   clip=''; have wl-copy && clip='wl-copy'
   [ -z "$clip" ] && have xclip && clip='xclip -selection clipboard'
+  # fzf runs these with bash (see FZF) and replaces {} with a quoted string.
+  qdir=$(printf '%q' "$WALLDIR"); qself=$(printf '%q' "$SELF")
 
   local -a binds=(
-    --bind "focus:execute-silent($SELF __wlive {})"
-    --bind "ctrl-s:reload($SELF __wfind | shuf)"
-    --bind "alt-o:execute-silent(xdg-open $WALLDIR >/dev/null 2>&1)"
+    --bind "focus:execute-silent($qself __wlive {})"
+    --bind "ctrl-s:reload($qself __wfind | shuf)"
+    --bind "alt-o:execute-silent(xdg-open $qdir >/dev/null 2>&1)"
   )
-  [ -n "$clip" ] && binds+=( --bind "ctrl-y:execute-silent(printf '%s' \"$WALLDIR/{}\" | $clip)" )
+  [ -n "$clip" ] && binds+=( --bind "ctrl-y:execute-silent(printf '%s/%s' $qdir {} | $clip)" )
 
   sel=$(wall_find \
-      | FZF --prompt="$(t 'wallpaper') > " --preview "$SELF __wprev {}" \
+      | FZF --prompt="$(t 'wallpaper') > " --preview "$qself __wprev {}" \
         --preview-window='right,52%,border-left' "${binds[@]}" \
         --header="$(t 'arrows preview live · ENTER apply · ESC restore · Ctrl-S shuffle · Alt-O folder')")
   clear_wall_preview
@@ -1690,7 +1924,6 @@ pick_wallpaper(){
   stop_wall_preview
   printf '%s\n' "$WALLDIR/$sel" > "$WALLFILE"
   apply_wall_now "$WALLDIR/$sel"
-  write_hyprpaper "$WALLDIR/$sel"
   render
   ok "$(t 'wallpaper'): $sel ($(t 'also on the lock screen'))"
 }
@@ -1702,15 +1935,22 @@ pick_wallpaper(){
 # your OK. The file is named to sort AFTER the KDE one, so our choice wins.
 SDDM_THEMES_DIR="/usr/share/sddm/themes"
 
+# Current= of the [Theme] section in one file (empty when not set there).
+sddm_theme_of(){
+  awk '/^[[:space:]]*\[/ { sec = $0; gsub(/[][[:space:]\r]/, "", sec) }
+       sec == "Theme" && /^[[:space:]]*Current[[:space:]]*=/ {
+         v = $0; sub(/^[^=]*=[[:space:]]*/, "", v); gsub(/[[:space:]\r]+$/, "", v); cur = v }
+       END { if (cur != "") print cur }' "$1" 2>/dev/null
+}
 sddm_current(){
-  # Highest-precedence Current= across sddm.conf and sddm.conf.d/*.conf (later
-  # files win, so the last match is the effective one).
-  { grep -h '^Current=' /etc/sddm.conf 2>/dev/null
-    local f
-    for f in $(ls -1 /etc/sddm.conf.d/*.conf 2>/dev/null | sort); do
-      grep -h '^Current=' "$f" 2>/dev/null
-    done
-  } | tail -1 | cut -d= -f2- | tr -d '\r'
+  # SDDM reads the drop-in dirs in name order (later wins) and /etc/sddm.conf
+  # LAST, so sddm.conf has the highest precedence: the last value is effective.
+  local f v cur=""
+  for f in /usr/lib/sddm/sddm.conf.d/*.conf /etc/sddm.conf.d/*.conf /etc/sddm.conf; do
+    [ -f "$f" ] || continue
+    v=$(sddm_theme_of "$f"); [ -n "$v" ] && cur="$v"
+  done
+  printf '%s' "$cur"
 }
 
 sddm_shot(){
@@ -1779,9 +2019,12 @@ apply_sddm(){
 }
 
 pick_sddm(){
-  have fzf || { warn "$(t 'install fzf for the menu')"; return 1; }
   [ -d "$SDDM_THEMES_DIR" ] || { err "$(t 'no SDDM themes installed')"; return 1; }
   local sel cur; cur=$(sddm_current)
+  # /etc/sddm.conf is read last: a Current= there overrides zz-hyprism.conf.
+  if [ -n "$(sddm_theme_of /etc/sddm.conf)" ]; then
+    warn "$(t '/etc/sddm.conf sets Current= itself and overrides the theme chosen here; remove that line (as root) for the choice to take effect')"
+  fi
   sel=$(ls -1 "$SDDM_THEMES_DIR" 2>/dev/null \
       | FZF --prompt="$(t 'login screen (SDDM)') > " \
         --preview "$SELF __sddmprev {}" \
@@ -1793,18 +2036,22 @@ pick_sddm(){
 
 # ---------- border color ----------
 # Applies just the border, live, without persisting. Used by the FZF preview.
+# The inactive border in effect: the Borders-menu choice, else the palette line.
+border_inactive_eff(){ local i; i=$(sget border_inactive); [ -n "$i" ] || i=$(pal_get line); printf '%s' "$i"; }
+# A Borders-menu key -> hex. 'follow' = the palette's own accent, unadjusted.
+border_hex(){ if [ "$1" = follow ]; then bright_of 100 "$(pal_get accent)"; else printf '%s' "$1"; fi; }
+
 border_live(){
   have hyprctl || return 0
   local a="${1#\#}" i="${2#\#}"
-  [ -n "$i" ] || i="2a2a2a"
+  [ -n "$i" ] || i=$(border_inactive_eff); i="${i#\#}"
   hyprctl eval "hl.config({ general = { col = { active_border = \"rgba(${a}ff)\", inactive_border = \"rgba(${i}ff)\" } } })" >/dev/null 2>&1
 }
 
 # Offered colors: the palette's own first, then a handful of common tones.
 # Format: "hex  name" (the hex stays as the canonical first token).
 border_options(){
-  local name; name=$(cat "$STATE" 2>/dev/null)
-  [ -f "$PAL/$name.env" ] && ( set -a; . "$PAL/$name.env"; set +a
+  local name; name=$(active_pal) && ( loadpal "$name"
     printf '%s  %s\n' "$accent"     "$(t 'palette accent')"
     printf '%s  %s\n' "$accent_lit" "$(t 'light accent')"
     printf '%s  %s\n' "$line"       "$(t 'palette line')"
@@ -1829,18 +2076,16 @@ EOF
 }
 
 preview_border(){
-  local hex="$1"
-  local name; name=$(cat "$STATE" 2>/dev/null)
-  [ -f "$PAL/$name.env" ] && loadpal "$name"
+  local hex; hex=$(border_hex "$1")
+  local name; name=$(active_pal) && loadpal "$name"
   local inactive; inactive=$(sget border_inactive)
-  [ -f "$PAL/$name.env" ] && [ -z "$inactive" ] && \
-    inactive=$( set -a; . "$PAL/$name.env"; set +a; printf '%s' "$line" )
+  [ -n "$inactive" ] || inactive="${line:-#2a2a2a}"
 
   printf '%-14s %s\n' "$(t 'active border')" "$hex"
-  printf '%-14s %s\n\n' "$(t 'inactive border')" "${inactive:-#2a2a2a}"
+  printf '%-14s %s\n\n' "$(t 'inactive border')" "$inactive"
 
   # draw two little windows, active and inactive
-  local W=34 B lblA lblI; B=$(abg "${bg:-#000000}" 2>/dev/null || printf '')
+  local W=34 lblA lblI
   lblA=$(t 'active window'); lblI=$(t 'inactive window')
   printf '%s%s' "$(afg "$hex")" ""
   printf '  ┌%s┐\n' "$(printf '─%.0s' $(seq 1 $W))"
@@ -1849,7 +2094,7 @@ preview_border(){
   printf '  │%s│\n' "$(printf ' %.0s' $(seq 1 $W))"
   printf '  └%s┘%s\n\n' "$(printf '─%.0s' $(seq 1 $W))" "$Z"
 
-  printf '%s' "$(afg "${inactive:-#2a2a2a}")"
+  printf '%s' "$(afg "$inactive")"
   printf '  ┌%s┐\n' "$(printf '─%.0s' $(seq 1 $W))"
   printf '  │%*s%*s│\n' $(( (W+${#lblI})/2 )) "$lblI" $(( W - (W+${#lblI})/2 )) ""
   printf '  └%s┘%s\n' "$(printf '─%.0s' $(seq 1 $W))" "$Z"
@@ -1896,12 +2141,10 @@ pick_bordas(){
 
 # Computes the effective accent for a given brightness percentage, no writes.
 bright_of(){
-  local base br="$1"
-  base=$(sget accent_override)
-  if [ -z "$base" ]; then
-    local name; name=$(cat "$STATE" 2>/dev/null)
-    base=$( set -a; . "$PAL/$name.env" 2>/dev/null; set +a; printf '%s' "${accent:-#888888}" )
-  fi
+  local base="${2:-}" br="$1"
+  [ -n "$base" ] || base=$(sget accent_override)
+  [ -n "$base" ] || base=$(pal_get accent)
+  [ -n "$base" ] || base="#888888"
   if [ "$br" -gt 100 ] 2>/dev/null; then mix "#ffffff" "$base" $(( br - 100 ))
   elif [ "$br" -lt 100 ] 2>/dev/null; then mix "#000000" "$base" $(( 100 - br ))
   else printf '%s' "$base"; fi
@@ -1916,14 +2159,7 @@ preview_bright(){
 }
 
 bright_live(){
-  local hex inactive name
-  hex=$(bright_of "${1// /}")
-  inactive=$(sget border_inactive)
-  if [ -z "$inactive" ]; then
-    name=$(cat "$STATE" 2>/dev/null)
-    inactive=$(set -a; . "$PAL/$name.env" 2>/dev/null; set +a; printf '%s' "${line:-#2a2a2a}")
-  fi
-  border_live "$hex" "$inactive"
+  border_live "$(bright_of "${1// /}")" "$(border_inactive_eff)"
 }
 
 pick_aparencia(){
@@ -2209,8 +2445,9 @@ bar_style_set(){
     segmented) sset bar_margin 0; sset bar_radius 8;  sset bar_gap 6; h=30 ;;
   esac
   # Pills/segmented need a bit more height so chips are not squished; flat is 26.
+  # config.jsonc gets the height from .state on the next render
+  # (gen_waybar_layout), written through so a symlinked config survives.
   sset bar_enabled on; sset barh "$h"
-  [ -f "$WBAR/config.jsonc" ] && sed -i "s/\"height\": [0-9]*,/\"height\": $h,/" "$WBAR/config.jsonc"
 }
 
 pick_estilo(){
@@ -2237,6 +2474,7 @@ pick_estilo(){
 }
 
 pick_barra(){
+  [ -f "$WBAR/config.jsonc" ] || { err "$(t 'Waybar config not found'): ${WBAR/#$HOME/\~}/config.jsonc"; return 1; }
   local h; h=$(printf '%s\n' "0   $(t 'no bar')" "22  $(t 'thin')" "26  $(t 'recommended')" "30  $(t 'tall')" "36  $(t 'thick')" \
       | FZF --prompt="$(t 'bar height') > ")
   if [ -n "${h:-}" ]; then
@@ -2245,12 +2483,11 @@ pick_barra(){
     else
       sset bar_enabled on
       sset barh "${h%% *}"
-      sed -i "s/\"height\": [0-9]*,/\"height\": ${h%% *},/" "$WBAR/config.jsonc"
     fi
   fi
   local p; p=$( { row bottom "$(t 'at the bottom')"; row top "$(t 'at the top')"; } | FZFM --prompt="$(t 'position') > ")
-  [ -n "${p:-}" ] && { p=$(mkey "$p"); sset barpos "$p"
-    sed -i "s/\"position\": \"[a-z]*\",/\"position\": \"$p\",/" "$WBAR/config.jsonc"; }
+  [ -n "${p:-}" ] && sset barpos "$(mkey "$p")"
+  # height/position reach config.jsonc through render -> gen_waybar_layout.
   render
   if [ "$(sget bar_enabled)" = "on" ]; then
     ok "$(t 'bar'): $(sget barh)px, $(sget barpos)"
@@ -2276,18 +2513,28 @@ bar_preset(){
   case "$preset" in
     minimo)
       sset bar_window on; sset bar_audio on; sset bar_network on
-      sset bar_battery on; sset bar_clock on; sset bar_power on
+      sset bar_clock on; sset bar_power on
       ;;
     equilibrado)
       sset bar_window on; sset bar_media on; sset bar_language on
       sset bar_idle on; sset bar_temperature on; sset bar_disk on
-      sset bar_memory on; sset bar_cpu on; sset bar_backlight on
-      sset bar_audio on; sset bar_network on; sset bar_battery on
+      sset bar_memory on; sset bar_cpu on
+      sset bar_audio on; sset bar_network on
       sset bar_clock on; sset bar_power on
       ;;
     completo)
       bar_all on
       ;;
+  esac
+  # Battery and screen brightness only where the hardware exists (a desktop
+  # has neither; the modules would just sit there empty or erroring).
+  case "$preset" in
+    minimo|equilibrado|completo)
+      if has_battery; then sset bar_battery on; else sset bar_battery off; fi ;;
+  esac
+  case "$preset" in
+    equilibrado|completo)
+      if has_backlight; then sset bar_backlight on; else sset bar_backlight off; fi ;;
   esac
 }
 
@@ -2319,7 +2566,7 @@ pick_modulos(){
       "battery      [$(bar_mark bar_battery)] $(t 'battery')" \
       "clock        [$(bar_mark bar_clock)] $(t 'clock')" \
       "power        [$(bar_mark bar_power)] $(t 'session menu')" \
-      "back" | FZF --prompt="$(t 'bar modules') > " \
+      "back         $(t 'back')" | FZF --prompt="$(t 'bar modules') > " \
         --header="$(t 'ENTER toggles the item; applied instantly')")
     key="${c%% *}"
     case "$key" in
@@ -2463,31 +2710,39 @@ pick_workspaces(){
 }
 
 pick_entrada(){
-  local c v layout variant
+  local c v k kbv touch=0
+  # Touchpad rows (and touchpad gestures) only when a touchpad exists.
+  has_touchpad && touch=1
   while true; do
+    kbv=$(sget kb_variant)
     c=$( {
-      row keyboard    "$(t 'keyboard') · $(sget kb_layout) / $(sget kb_variant)"
+      row keyboard    "$(t 'keyboard') · $(sget kb_layout)${kbv:+ / $kbv}"
       row focus       "$(t 'focus') · $(t 'mouse mode') $(sget follow_mouse)"
       row sensitivity "$(t 'sensitivity') · $(sget mouse_sensitivity)"
       row wheel       "$(t 'wheel') · $(t 'speed') $(sget mouse_scroll), $(t 'natural') $(sget mouse_natural)"
-      row touchscroll "touch-scroll · $(t 'speed') $(sget touch_scroll), $(t 'natural') $(sget touch_natural)"
-      row touchtap    "$(t 'touch-tap') · $(t 'tap to click') $(sget touch_tap)"
-      row touchtype   "$(t 'touch-typing') · $(t 'disable while typing') $(sget touch_dwt)"
-      row gestures    "$(t 'gestures') · $(sget gesture_fingers) $(t 'fingers to switch area')"
+      if [ "$touch" -eq 1 ]; then
+        row touchscroll "touch-scroll · $(t 'speed') $(sget touch_scroll), $(t 'natural') $(sget touch_natural)"
+        row touchtap    "$(t 'touch-tap') · $(t 'tap to click') $(sget touch_tap)"
+        row touchtype   "$(t 'touch-typing') · $(t 'disable while typing') $(sget touch_dwt)"
+        row gestures    "$(t 'gestures') · $(sget gesture_fingers) $(t 'fingers to switch area')"
+      fi
       row back        "$(t 'back')"
       } | FZFM --prompt="$(t 'keyboard, mouse and touchpad') > " \
           --header="$(t 'all values are applied by Hyprland')" )
     case "$(mkey "$c")" in
       keyboard)
-        v=$(printf '%s\n' \
-          "br thinkpad   $(t 'Portuguese Brazil, ThinkPad')" \
-          "br nodeadkeys $(t 'Portuguese Brazil, no dead keys')" \
-          "us intl       $(t 'US English, international')" \
-          "us altgr-intl $(t 'US English, international AltGr')" \
-          | FZF --prompt="$(t 'keyboard layout') > ")
+        # KEY = layout|variant (an empty variant is the plain layout).
+        v=$( {
+          row "br|"            "br           $(t 'Portuguese Brazil, ABNT2 (no variant)')"
+          row "br|thinkpad"    "br thinkpad  $(t 'Portuguese Brazil, ThinkPad')"
+          row "br|nodeadkeys"  "br nodeadkeys $(t 'Portuguese Brazil, no dead keys')"
+          row "us|"            "us           $(t 'US English')"
+          row "us|intl"        "us intl      $(t 'US English, international')"
+          row "us|altgr-intl"  "us altgr-intl $(t 'US English, international AltGr')"
+          } | FZFM --prompt="$(t 'keyboard layout') > ")
         if [ -n "${v:-}" ]; then
-          layout=$(awk '{print $1}' <<<"$v"); variant=$(awk '{print $2}' <<<"$v")
-          sset kb_layout "$layout"; sset kb_variant "$variant"
+          k=$(mkey "$v")
+          sset kb_layout "${k%%|*}"; sset kb_variant "${k#*|}"
         fi
         ;;
       focus)
@@ -2668,7 +2923,7 @@ pick_bloqueio(){
         [ -n "${v:-}" ] && sset lock_hide_cursor "$(mkey "$v")"
         ;;
       message)
-        printf '\n  %s\n  %s: ' "$(t 'Type a line for the bottom of the lock screen.')" "$(t 'Leave empty for the default hint')"
+        printf '\n  %s\n  %s: ' "$(t 'Type a line for the bottom of the lock screen.')" "$(t 'Leave empty for no line')"
         IFS= read -r v || v=""
         sset lock_message "$v"
         ;;
@@ -2770,27 +3025,128 @@ EOF
   read -rp "  [enter] " _
 }
 
+# ---------- presets ----------
+# Built-in presets ship read-only with the repo; user presets live in
+# $PRESETS and win on a name clash. Format: key=value lines with the same keys
+# as .state (+ paleta=<palette>, wallpaper=<file>); '#' lines are comments —
+# the first "# " line is the description ("# pt: ..." when lang=pt).
+BUILTIN_PRESETS="$HYPRISM_ROOT/presets"
+
+# Keys a preset never changes: the interface language and personal input.
+preset_skip_key(){
+  case "$1" in
+    paleta|wallpaper|lang|kb_layout|kb_variant|mouse_sensitivity|mouse_natural|touch_*|cursor_theme|cursor_size) return 0 ;;
+  esac
+  return 1
+}
+preset_sanitize(){  # no '/', whitespace -> '-', no leading '.'/'-'
+  local n="$1"
+  n=${n//\//}; n=${n//[[:space:]]/-}
+  while [[ $n == [.-]* ]]; do n=${n#?}; done
+  printf '%s' "$n"
+}
+preset_file(){  # NAME -> file path (user first, then built-in)
+  local n="$1" c
+  for c in "$n" "$(preset_sanitize "$n")"; do
+    [ -n "$c" ] || continue
+    [ -f "$PRESETS/$c.preset" ] && { printf '%s' "$PRESETS/$c.preset"; return 0; }
+    [ -f "$BUILTIN_PRESETS/$c.preset" ] && { printf '%s' "$BUILTIN_PRESETS/$c.preset"; return 0; }
+  done
+  return 1
+}
+preset_desc(){
+  local d=""
+  [ "$LANGX" = pt ] && d=$(awk '/^# pt:/ { sub(/^# pt:[[:space:]]*/, ""); print; exit }' "$1" 2>/dev/null)
+  [ -n "$d" ] || d=$(awk '/^# pt:/ { next } /^# / { sub(/^# /, ""); print; exit }' "$1" 2>/dev/null)
+  printf '%s' "$d"
+}
+# One line per preset: FILE<TAB>NAME<TAB>builtin|user, sorted by name.
+preset_entries(){
+  local f n
+  local -A seen=()
+  {
+    for f in "$PRESETS"/*.preset; do
+      [ -f "$f" ] || continue
+      n=${f##*/}; n=${n%.preset}; seen[$n]=1
+      printf '%s\t%s\tuser\n' "$f" "$n"
+    done
+    for f in "$BUILTIN_PRESETS"/*.preset; do
+      [ -f "$f" ] || continue
+      n=${f##*/}; n=${n%.preset}
+      [ -n "${seen[$n]+x}" ] && continue
+      printf '%s\t%s\tbuiltin\n' "$f" "$n"
+    done
+  } | sort -t$'\t' -k2,2
+}
+preset_list(){
+  local f n src d any=0
+  while IFS=$'\t' read -r f n src; do
+    any=1; d=$(preset_desc "$f")
+    if [ "$src" = builtin ]; then printf '  ★ %-22s %s\n' "$n" "$d"
+    else printf '    %-22s %s\n' "$n" "${d:-($(t 'user preset'))}"; fi
+  done < <(preset_entries)
+  [ "$any" -eq 1 ] || warn "$(t 'no presets yet')"
+}
+
 save_preset(){
   local n; read -rp "  $(t 'preset name'): " n
-  [ -z "${n:-}" ] && return 0
-  { cat "$SET"; printf 'paleta=%s\n' "$(cat "$STATE" 2>/dev/null)"
+  n=$(preset_sanitize "${n:-}")
+  [ -z "$n" ] && return 0
+  { printf '# %s\n' "$(t 'saved on') $(date +%F)"
+    grep -vE '^(paleta|wallpaper)=' "$SET" 2>/dev/null
+    printf 'paleta=%s\n' "$(cat "$STATE" 2>/dev/null)"
     printf 'wallpaper=%s\n' "$(cat "$WALLFILE" 2>/dev/null)"; } > "$PRESETS/$n.preset"
   ok "$(t 'saved'): $n"
 }
 
-load_preset(){
-  local sel; sel=$(find "$PRESETS" -name '*.preset' -printf '%f\n' 2>/dev/null | sed 's/\.preset$//' | sort \
-      | FZF --prompt="$(t 'preset') > " --preview "cat $PRESETS/{1}.preset" --preview-window='right,48%')
-  [ -z "${sel:-}" ] && return 0
-  local f="$PRESETS/$sel.preset"
-  grep -vE '^(paleta|wallpaper)=' "$f" > "$SET"
-  local p w; p=$(grep -m1 '^paleta=' "$f" | cut -d= -f2-); w=$(grep -m1 '^wallpaper=' "$f" | cut -d= -f2-)
-  [ -n "$p" ] && printf '%s\n' "$p" > "$STATE"
+# Applies a preset by MERGING it into .state: only the keys it lists change
+# (never lang or the personal input keys). An empty/missing wallpaper keeps the
+# current one; a palette switch without an explicit accent resets the manual
+# accent so the chosen palette really shows (same rule as apply()).
+preset_apply(){
+  local f="$1" name="$2" line k v p="" w="" has_acc=0 kv
+  kv=$(mktemp "${TMPDIR:-/tmp}/hyprism-preset.XXXXXX") || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    line=${line%$'\r'}
+    case "$line" in ''|'#'*) continue ;; esac
+    [[ $line == *=* ]] || continue
+    k=${line%%=*}; v=${line#*=}
+    [[ $k =~ ^[A-Za-z0-9_]+$ ]] || continue
+    case "$k" in paleta) p=$v; continue ;; wallpaper) w=$v; continue ;; accent_override) has_acc=1 ;; esac
+    preset_skip_key "$k" && continue
+    printf '%s=%s\n' "$k" "$v" >> "$kv"
+  done < "$f"
+  if [ -n "$p" ]; then
+    if [ -f "$PAL/$p.env" ]; then
+      printf '%s\n' "$p" > "$STATE"
+      [ "$has_acc" -eq 1 ] || printf 'accent_override=\naccent_bright=100\nborder_inactive=\n' >> "$kv"
+    else
+      warn "$(t 'palette') '$p' $(t 'does not exist — try hyprism -l')"
+    fi
+  fi
+  _state_merge "$kv"; rm -f "$kv"
   if [ -n "$w" ] && [ -f "$w" ]; then
     printf '%s\n' "$w" > "$WALLFILE"
-    apply_wall_now "$w"; write_hyprpaper "$w"
+    apply_wall_now "$w"
   fi
-  render; ok "$(t 'preset applied'): $sel"
+  render; ok "$(t 'preset applied'): $name"
+}
+
+load_preset(){
+  local sel f n src d label qself
+  qself=$(printf '%q' "$SELF")
+  sel=$(while IFS=$'\t' read -r f n src; do
+          d=$(preset_desc "$f")
+          if [ "$src" = builtin ]; then label=$(printf '★ %-20s %s' "$n" "$d")
+          else label=$(printf '  %-20s %s' "$n" "${d:-($(t 'user preset'))}"); fi
+          row "$f" "$label"
+        done < <(preset_entries) \
+      | FZFM --prompt="$(t 'preset') > " --preview "$qself __presetprev {}" --preview-window='right,48%' \
+          --header="$(t '★ built-in · ENTER applies (only the keys the preset lists)')")
+  [ -z "${sel:-}" ] && return 0
+  f=$(mkey "$sel"); n=${f##*/}; n=${n%.preset}
+  [ -f "$f" ] || return 1
+  preset_apply "$f" "$n"
 }
 
 pick_preset(){
@@ -2799,6 +3155,16 @@ pick_preset(){
       row load "$(t 'apply a saved preset')"
       } | FZFM --prompt="$(t 'presets') > ")
   case "$(mkey "$c")" in save) save_preset;; load) load_preset;; esac
+}
+
+# hyprism preset [list|<name>]
+preset_cmd(){
+  case "${1:-}" in
+    "") need_fzf; pick_preset ;;
+    list|ls|-l) preset_list ;;
+    *) local f; f=$(preset_file "$1") || { err "$(t 'preset not found'): $1"; preset_list >&2; return 1; }
+       local n=${f##*/}; preset_apply "$f" "${n%.preset}" ;;
+  esac
 }
 
 sync_global(){
@@ -2909,28 +3275,75 @@ net_summary(){
   printf '%-12s %s\n' "$(t 'connection')" "${con:-—}"
   printf '%-12s %s\n' "IP" "${ip:-—}"
 }
+# nmcli -t escapes ':' as '\:' and '\' as '\\'. This awk function splits a
+# terse line on the unescaped ':' only and unescapes each field.
+NM_SPLIT='function nmsplit(s, a,   n, i, c, cur) {
+  n = 1; cur = ""
+  for (i = 1; i <= length(s); i++) {
+    c = substr(s, i, 1)
+    if (c == "\\" && i < length(s)) { i++; cur = cur substr(s, i, 1); continue }
+    if (c == ":") { a[n++] = cur; cur = ""; continue }
+    cur = cur c
+  }
+  a[n] = cur; return n
+}'
+
+# Saved Wi-Fi profiles: UUID<TAB>NAME<TAB>SSID (SSID of the profile itself —
+# its name may differ from the network name).
+wifi_profiles(){
+  local uuid name type ssid
+  nmcli -t -f UUID,NAME,TYPE con show 2>/dev/null \
+    | awk "$NM_SPLIT"' { nmsplit($0, f); print f[1] "\t" f[2] "\t" f[3] }' \
+    | while IFS=$'\t' read -r uuid name type; do
+        [ "$type" = 802-11-wireless ] || continue
+        ssid=$(nmcli --escape no -g 802-11-wireless.ssid con show uuid "$uuid" 2>/dev/null)
+        printf '%s\t%s\t%s\n' "$uuid" "$name" "${ssid:-$name}"
+      done
+}
+wifi_forget_menu(){
+  local sel uuid
+  sel=$(wifi_profiles | awk -F'\t' '{ printf "%s\t%s  (%s)\n", $1, $2, $3 }' \
+      | FZFM --prompt="$(t 'forget which network') > " --header="$(t 'ENTER deletes the saved profile (password included)')")
+  [ -n "${sel:-}" ] || return 0
+  uuid=$(mkey "$sel")
+  nmcli con delete uuid "$uuid" >/dev/null 2>&1 && ok "$(t 'forgotten')" || err "$(t 'failed')"
+}
 net_wifi(){
   have nmcli || { err "$(t 'nmcli not found')"; return; }
   nmcli radio wifi on >/dev/null 2>&1
-  local sel ssid
-  sel=$(nmcli -t -f IN-USE,SIGNAL,SECURITY,SSID dev wifi list --rescan yes 2>/dev/null \
-      | awk -F: 'NF{u=($1=="*")?"● ":"  "; printf "%s%3s%%  %-12s %s\n",u,$2,($3==""?"open":$3),$4}' \
-      | FZF --prompt="$(t 'Wi-Fi networks') > " --header="$(t 'ENTER connects · rescans live')")
+  local sel ssid uuid act pw rc
+  # Hidden KEY column = the raw SSID (spaces, ':' and multi-word security like
+  # "WPA2 WPA3" can no longer shift it). Duplicate APs of one SSID collapse.
+  sel=$( { row ':forget' "  $(t 'forget a saved network…')"
+           nmcli -t -f IN-USE,SIGNAL,SECURITY,SSID dev wifi list --rescan yes 2>/dev/null \
+             | awk "$NM_SPLIT"' {
+                 nmsplit($0, f); ssid = f[4]
+                 if (ssid == "" || seen[ssid]++) next
+                 sec = (f[3] == "" || f[3] == "--") ? "open" : f[3]
+                 printf "%s\t%s %3s%%  %-14s %s\n", ssid, (f[1] == "*") ? "●" : " ", f[2], sec, ssid }'
+         } | FZFM --prompt="$(t 'Wi-Fi networks') > " --header="$(t 'ENTER connects · saved networks can be forgotten')")
   [ -n "${sel:-}" ] || return 0
-  ssid=$(printf '%s' "$sel" | sed -E 's/^..[ ]*[0-9]+%[ ]+[^ ]+[ ]+//')
+  ssid=$(mkey "$sel")
+  [ "$ssid" = ':forget' ] && { wifi_forget_menu; return; }
   [ -n "$ssid" ] || return 0
-  if nmcli -t -f NAME con show 2>/dev/null | grep -qx "$ssid"; then
-    nmcli con up id "$ssid" >/dev/null 2>&1 && ok "$(t 'connected'): $ssid" || err "$(t 'failed to connect')"
-  else
-    local pw; printf '  %s: ' "$(t 'password for') $ssid"; read -rs pw; echo
-    if [ -n "$pw" ]; then nmcli dev wifi connect "$ssid" password "$pw" >/dev/null 2>&1
-    else nmcli dev wifi connect "$ssid" >/dev/null 2>&1; fi
-    [ $? -eq 0 ] && ok "$(t 'connected'): $ssid" || err "$(t 'failed to connect')"
+  uuid=$(wifi_profiles | S="$ssid" awk -F'\t' '$3 == ENVIRON["S"] { print $1; exit }')
+  if [ -n "$uuid" ]; then
+    act=$( { row up "$(t 'connect')"; row forget "$(t 'forget this network')"; row back "$(t 'back')"; } \
+        | FZFM --prompt="$ssid > ")
+    case "$(mkey "$act")" in
+      up)     nmcli con up uuid "$uuid" >/dev/null 2>&1 && ok "$(t 'connected'): $ssid" || err "$(t 'failed to connect')" ;;
+      forget) nmcli con delete uuid "$uuid" >/dev/null 2>&1 && ok "$(t 'forgotten'): $ssid" || err "$(t 'failed')" ;;
+    esac
+    return 0
   fi
+  printf '  %s: ' "$(t 'password for') $ssid"; read -rs pw; echo
+  if [ -n "$pw" ]; then nmcli dev wifi connect "$ssid" password "$pw" >/dev/null 2>&1; rc=$?
+  else nmcli dev wifi connect "$ssid" >/dev/null 2>&1; rc=$?; fi
+  if [ "$rc" -eq 0 ]; then ok "$(t 'connected'): $ssid"; else err "$(t 'failed to connect')"; fi
 }
 net_vpn(){
   have nmcli || { err "$(t 'nmcli not found')"; return; }
-  local sel name state
+  local sel
   sel=$(nmcli -t -f NAME,TYPE con show 2>/dev/null | awk -F: '$2 ~ /vpn|wireguard/ {print $1}' \
       | FZF --prompt="$(t 'VPN / tunnels') > " --header="$(t 'ENTER toggles up/down')")
   [ -n "${sel:-}" ] || return 0
@@ -3061,12 +3474,12 @@ system_menu(){
 # Running `hyprism`, `hyprism menu` or SUPER+I lands here — we just hand off to
 # it. Falls back to the full appearance menu if visualconf is not installed.
 center_menu(){
-  if command -v visualconf >/dev/null 2>&1; then exec visualconf; fi
+  if have visualconf; then exec visualconf; fi
+  need_fzf
   main_menu
 }
 
 main_menu(){
-  have fzf || { warn "$(t 'install fzf for the menu, or use: hyprism <palette>')"; palettes; return; }
   while true; do
     local c; c=$( {
       row palette       "$(t 'the colors (Hyprland, Waybar, Hyprlock, Dunst)')"
@@ -3075,7 +3488,7 @@ main_menu(){
       row appearance    "$(t 'border width, corners and spacing')"
       row effects       "$(t 'blur, shadow, opacity and focus')"
       row animations    "$(t 'presets for windows, layers and workspaces')"
-      row bar           "$(t 'height, position and font of the bar')"
+      row bar           "$(t 'height and position of the bar')"
       row style         "$(t 'bar look: flat / pills / segmented + tuning')"
       row modules       "$(t 'what appears on the bar, item by item')"
       row windows       "$(t 'opening, layout, snapping and focus')"
@@ -3085,6 +3498,8 @@ main_menu(){
       row lock          "$(t 'background, clock and cursor of hyprlock')"
       row login         "$(t 'login screen theme (SDDM), like picking a wallpaper')"
       row notifications "$(t 'position, size, timeout and icons')"
+      row network       "$(t 'Wi-Fi, VPN, fixed IP, hostname, status')"
+      row system        "$(t 'network, sound, bluetooth, displays')"
       row font          "$(t 'family and size of the bar')"
       row lang          "$(t 'interface language (English / Portuguese)')"
       row binds         "$(t 'see the keybinding list')"
@@ -3092,7 +3507,7 @@ main_menu(){
       row sync          "$(t 'propagate the global theme to Kitty and Rofi')"
       row config        "$(t 'see everything active')"
       row quit          "$(t 'quit')"
-      } | FZFM --prompt='hyprism > ' --height=78% \
+      } | FZFM --prompt='hyprism > ' \
           --header="$(t 'Hyprism · personalization center')" )
     case "$(mkey "$c")" in
       palette) pick_palette ;;       wallpaper) pick_wallpaper ;;
@@ -3103,7 +3518,9 @@ main_menu(){
       workspaces) pick_workspaces ;; input) pick_entrada ;;
       cursor) pick_cursor ;;         lock) pick_bloqueio ;;
       login) pick_sddm ;;
-      notifications) pick_notificacoes ;; font) pick_fonte ;;
+      notifications) pick_notificacoes ;;
+      network) net_module ;;         system) system_menu ;;
+      font) pick_fonte ;;
       lang) pick_lang ;;             binds) show_binds ;;
       preset) pick_preset ;;         sync) sync_global ;;
       config) show_config ;;         quit|"") break ;;
@@ -3111,61 +3528,75 @@ main_menu(){
   done
 }
 
-# The wallpaper hot-path must not initialize dozens of options: this keeps each
-# focus event a few milliseconds instead of ~180 ms.
+# Every menu needs fzf: check once, before dispatching, with a clear message.
+need_fzf(){
+  have fzf && return 0
+  err "$(t 'fzf is required for the menus — install it (e.g. sudo pacman -S fzf), or use: hyprism <palette>')"
+  exit 1
+}
+
+# ---------- dispatch ----------
+# Hot paths first: wallpaper/border/brightness previews run on every cursor
+# move, so they skip seed() (and the translation catalog when they print no
+# text). Missing keys simply read as empty there.
 case "${1:-}" in
-  __wlive)   queue_wall_preview "$WALLDIR/$2"; exit ;;
-  __wworker) wall_preview_worker; exit ;;
-  __wfind)   wall_find; exit ;;
+  __wlive)     queue_wall_preview "$WALLDIR/$2"; exit ;;
+  __wworker)   wall_preview_worker; exit ;;
+  __wfind)     wall_find; exit ;;
+  __blive)     border_live "$(border_hex "$2")" ""; exit ;;
+  __brlive)    bright_live "$2"; exit ;;
+  __presetprev) cat -- "${2%%$'\t'*}" 2>/dev/null; exit 0 ;;
+  -V|--version) version; exit 0 ;;
+esac
+
+lang_init
+case "${1:-}" in
+  __prev)      preview "$2"; exit ;;
+  __wprev)     preview_wall "$2"; exit ;;
+  __sddmprev)  preview_sddm "$2"; exit ;;
+  __bprev)     preview_border "$2"; exit ;;
+  __brprev)    preview_bright "$2"; exit ;;
+  -h|--help|help|ajuda) usage; exit 0 ;;
+  -l|--list)   palettes; exit 0 ;;
+  -g|--gerar|--generate)  gen_palettes; exit 0 ;;
 esac
 
 seed
-lang_init
 case "${1:-}" in
-  __prev)      preview "$2" ;;
-  __wprev)     preview_wall "$2" ;;
-  __sddmprev)  preview_sddm "$2" ;;
-  __bprev)     preview_border "$2" ;;
-  __blive)     border_live "$2" "$(sget border_inactive)" ;;
-  __brprev)    preview_bright "$2" ;;
-  __brlive)    bright_live "$2" ;;
-  -l|--list)   palettes ;;
-  -g|--gerar|--generate)  gen_palettes ;;
   -r|--random) apply "$(palettes | shuf -n1)" ;;
-  -h|--help|help|ajuda)   usage ;;
-  palette|paleta|theme|tema|colors|cores) pick_palette ;;
-  wallpaper|papel)   pick_wallpaper ;;
-  appearance|aparencia)   pick_aparencia ;;
-  borders|bordas|border|borda)  pick_bordas ;;
-  effects|efeitos|blur)      pick_efeitos "${2:-}" ;;
-  animations|animacoes|anim) pick_animacoes "${2:-}" ;;
-  bar|barra|waybar)      pick_barra ;;
+  palette|paleta|theme|tema|colors|cores) need_fzf; pick_palette ;;
+  wallpaper|papel)   need_fzf; pick_wallpaper ;;
+  appearance|aparencia)   need_fzf; pick_aparencia ;;
+  borders|bordas|border|borda)  need_fzf; pick_bordas ;;
+  effects|efeitos|blur)      [ -n "${2:-}" ] || need_fzf; pick_efeitos "${2:-}" ;;
+  animations|animacoes|anim) [ -n "${2:-}" ] || need_fzf; pick_animacoes "${2:-}" ;;
+  bar|barra|waybar)      need_fzf; pick_barra ;;
   style|estilo)      if [ -n "${2:-}" ]; then
-                       bar_style_set "$2" && render && ok "$(t 'style'): $2" \
-                         || err "$(t 'invalid style (use flat, pills or segmented)')"
-                     else pick_estilo; fi ;;
-  modules|modulos)   pick_modulos ;;
-  windows|janelas|comportamento) pick_janelas ;;
-  workspaces|areas|areas-de-trabalho) pick_workspaces ;;
-  input|entrada|touchpad) pick_entrada ;;
-  cursor|ponteiro)   pick_cursor ;;
-  lock|bloqueio|hyprlock) pick_bloqueio ;;
-  sddm|login|greeter|tela-de-inicio) pick_sddm ;;
-  notifications|notificacoes|notify|dunst) pick_notificacoes ;;
+                       if bar_style_set "$2" && render; then ok "$(t 'style'): $2"
+                       else err "$(t 'invalid style (use flat, pills or segmented)')"; exit 2; fi
+                     else need_fzf; pick_estilo; fi ;;
+  modules|modulos)   need_fzf; pick_modulos ;;
+  windows|janelas|comportamento) need_fzf; pick_janelas ;;
+  workspaces|areas|areas-de-trabalho) need_fzf; pick_workspaces ;;
+  input|entrada|touchpad) need_fzf; pick_entrada ;;
+  cursor|ponteiro)   need_fzf; pick_cursor ;;
+  lock|bloqueio|hyprlock) need_fzf; pick_bloqueio ;;
+  sddm|login|greeter|tela-de-inicio) need_fzf; pick_sddm ;;
+  notifications|notificacoes|notify|dunst) need_fzf; pick_notificacoes ;;
   menu|center|central|centro) center_menu ;;
-  network|rede|net) net_module ;;
-  system|sistema)   system_menu ;;
-  font|fonte)       pick_fonte ;;
+  network|rede|net) need_fzf; net_module ;;
+  system|sistema)   need_fzf; system_menu ;;
+  font|fonte)       need_fzf; pick_fonte ;;
   lang|idioma|language) if [ -n "${2:-}" ]; then
                           case "$2" in en|pt) sset lang "$2"; lang_init; ok "$(t 'language'): $2" ;;
-                            *) err "$(t 'invalid language (use en or pt)')" ;; esac
-                        else pick_lang; fi ;;
+                            *) err "$(t 'invalid language (use en or pt)')"; exit 2 ;; esac
+                        else need_fzf; pick_lang; fi ;;
   binds|atalhos)    show_binds ;;
-  preset|presets)   pick_preset ;;
+  preset|presets)   preset_cmd "${2:-}" ;;
   sync)             sync_global ;;
   config)           show_config ;;
-  render)           render; ok "$(t 'reapplied')" ;;
+  render)           render && ok "$(t 'reapplied')" ;;
   "")               center_menu ;;
   *) if [ -f "$PAL/$1.env" ]; then apply "$1"
-     else err "$(t 'unknown option or palette'): $1"; main_menu; fi ;;
+     else err "$(t 'unknown option or palette'): $1"; usage >&2; exit 2; fi ;;
 esac
