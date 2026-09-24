@@ -1,37 +1,67 @@
 #!/usr/bin/env bash
 # =====================================================================
-#  wifi-menu — gerenciador de Wi-Fi no rofi, usando nmcli.
+#  wifi-menu — Wi-Fi manager on rofi, using nmcli (part of Hyprism).
 #
-#  Mostra numa lista so: qual esta conectada, quais ja estao salvas,
-#  a intensidade do sinal e se e protegida. Substitui o
-#  nm-connection-editor, que nao deixa nada disso obvio.
+#  One list shows which network is connected, which ones are saved,
+#  signal strength and whether each one is protected. It replaces
+#  nm-connection-editor, which makes none of that obvious.
 #
-#  Duas decisoes que evitam bug:
-#   - icones por escape \uXXXX, nao colados como caractere literal
-#     (literal se perde em algumas gravacoes de arquivo);
-#   - a escolha volta do rofi como INDICE (-format i), nao como texto.
-#     Assim o SSID nunca precisa ser extraido de volta da linha exibida,
-#     o que quebraria com nome contendo %, espaco duplo ou simbolo.
+#  Two decisions that avoid bugs:
+#   - icons as \uXXXX escapes, not pasted as literal characters
+#     (literals get lost by some editors/file writes);
+#   - rofi returns the choice as an INDEX (-format i), never as text.
+#     So the SSID never has to be parsed back out of the displayed line
+#     (that would break with names containing %, double spaces or
+#     symbols), and translated labels never drive the logic.
 #
-#  Carregar sem executar, para teste:  WIFI_MENU_LIB=1 source wifi-menu
+#  Language follows Hyprism ('hyprism lang en|pt', default en).
+#  Load without running, for tests:  WIFI_MENU_LIB=1 source wifi-menu
 # =====================================================================
-# Tema proprio: janela mais larga (SSID + sinal + cadeado) e campo de senha
-# estilizado. Ele herda a paleta ATIVA do launcher, entao seguir o tema do
-# sistema e automatico.
-ROFI_TEMA="$HOME/.config/rofi/wifi.rasi"
-ROFI(){ rofi -theme "$ROFI_TEMA" "$@"; }
-
 set -u
 
-ICON_OK=$''     # conectada
-ICON_SAVE=$''   # salva
-ICON_LOCK=$''   # protegida
-ICON_OPEN=$''   # aberta
-ICON_SCAN=$''   # procurar
-ICON_CFG=$''    # avancado
-ICON_OFF=$''    # desconectar / esquecer
+have(){ command -v "$1" >/dev/null 2>&1; }
 
-notify(){ command -v notify-send >/dev/null && notify-send -a "Wi-Fi" "$1" "${2:-}"; }
+# ---------- idioma ----------
+LANGX=$(grep -m1 '^lang=' "$HOME/.config/hypr/themes/.state" 2>/dev/null | cut -d= -f2-)
+[ "$LANGX" = pt ] || LANGX=en
+t(){ if [ "$LANGX" = pt ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }   # t "english" "português"
+
+# ---------- tema ----------
+# Tema proprio: janela mais larga (SSID + sinal + cadeado) e campo de senha
+# estilizado. Ele herda a paleta ATIVA do launcher (themes/current.rasi do
+# rofitheme), entao seguir o tema do sistema e automatico.
+ROFI_TEMA="$HOME/.config/rofi/wifi.rasi"
+ROFI_CUR="$HOME/.config/rofi/themes/current.rasi"
+HYPRISM_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+ROFI_ARGS=()
+
+# Instalacao nova: copia o wifi.rasi do Hyprism se o usuario nao tem um.
+# Se ainda faltar (ou faltar a paleta que ele importa), usa o tema padrao do rofi.
+setup_theme(){
+  if [ ! -e "$ROFI_TEMA" ] && [ -f "$HYPRISM_ROOT/share/rofi/wifi.rasi" ]; then
+    mkdir -p "$(dirname "$ROFI_TEMA")" && cp "$HYPRISM_ROOT/share/rofi/wifi.rasi" "$ROFI_TEMA"
+  fi
+  ROFI_ARGS=()
+  if [ -f "$ROFI_TEMA" ] && { [ -f "$ROFI_CUR" ] || ! grep -q 'themes/current.rasi' "$ROFI_TEMA"; }; then
+    ROFI_ARGS=(-theme "$ROFI_TEMA")
+  fi
+}
+
+# ROFI "texto de dica" argumentos-do-rofi...  (a dica segue o idioma)
+ROFI(){
+  local hint="$1"; shift
+  rofi "${ROFI_ARGS[@]}" -theme-str "entry { placeholder: \"$hint\"; }" "$@"
+}
+
+ICON_OK=$'\uf00c'     # conectada
+ICON_SAVE=$'\uf0c7'   # salva
+ICON_LOCK=$'\uf023'   # protegida
+ICON_OPEN=$'\uf09c'   # aberta
+ICON_SCAN=$'\uf021'   # procurar
+ICON_CFG=$'\uf013'    # avancado
+ICON_OFF=$'\uf00d'    # desconectar / esquecer
+
+notify(){ have notify-send && notify-send -a "Wi-Fi" "$1" "${2:-}"; }
 
 bars(){
   local s="${1:-0}"
@@ -81,52 +111,65 @@ conectar(){
 
   if printf '%s\n' "$salvas" | grep -qxF "$ssid"; then
     if nmcli connection up id "$ssid" >/dev/null 2>&1; then
-      notify "Conectado" "$ssid"
+      notify "$(t Connected Conectado)" "$ssid"
     else
-      notify "Nao conectou" "$ssid esta salva, mas a conexao falhou"
+      notify "$(t 'Could not connect' 'Não conectou')" "$(t "$ssid is saved, but the connection failed" "$ssid está salva, mas a conexão falhou")"
     fi
     return
   fi
 
-  senha=$(ROFI -dmenu -password -p "senha de $ssid" </dev/null)
+  senha=$(ROFI "$(t password senha)" -dmenu -password -p "$(t "password for $ssid" "senha de $ssid")" </dev/null)
   [ -z "${senha:-}" ] && return 0
 
   if nmcli device wifi connect "$ssid" password "$senha" >/dev/null 2>&1; then
-    notify "Conectado" "$ssid"
+    notify "$(t Connected Conectado)" "$ssid"
   else
-    notify "Nao conectou" "Senha incorreta ou fora de alcance"
+    notify "$(t 'Could not connect' 'Não conectou')" "$(t 'Wrong password or out of range' 'Senha incorreta ou fora de alcance')"
   fi
 }
 
+# Acoes de uma rede. Os rotulos sao traduzidos; a decisao usa keys[indice].
 acoes(){
-  local ssid="$1" ativa="$2" i opc
-  local -a itens
+  local ssid="$1" ativa="$2" i
+  local -a keys itens
   if [ "$ativa" = "yes" ]; then
-    itens=("$ICON_OFF  desconectar" "$ICON_OFF  esquecer esta rede" "voltar")
+    keys=(desconectar esquecer voltar)
+    itens=("$ICON_OFF  $(t disconnect desconectar)" "$ICON_OFF  $(t 'forget this network' 'esquecer esta rede')" "$(t back voltar)")
   else
-    itens=("conectar" "$ICON_OFF  esquecer esta rede" "voltar")
+    keys=(conectar esquecer voltar)
+    itens=("$(t connect conectar)" "$ICON_OFF  $(t 'forget this network' 'esquecer esta rede')" "$(t back voltar)")
   fi
 
-  i=$(printf '%s\n' "${itens[@]}" | ROFI -dmenu -i -no-custom -format i -p "$ssid")
-  [ -z "${i:-}" ] && return 0
-  opc="${itens[$i]}"
+  i=$(printf '%s\n' "${itens[@]}" | ROFI "$(t filter filtrar)" -dmenu -i -no-custom -format i -p "$ssid")
+  [[ "${i:-}" =~ ^[0-9]+$ ]] || return 0
 
-  case "$opc" in
-    *desconectar*) nmcli connection down id "$ssid"   >/dev/null 2>&1 && notify "Desconectado" "$ssid" ;;
-    *esquecer*)    nmcli connection delete id "$ssid" >/dev/null 2>&1 && notify "Rede esquecida" "$ssid" ;;
-    conectar)      conectar "$ssid" ;;
+  case "${keys[$i]:-}" in
+    desconectar) nmcli connection down id "$ssid"   >/dev/null 2>&1 && notify "$(t Disconnected Desconectado)" "$ssid" ;;
+    esquecer)    nmcli connection delete id "$ssid" >/dev/null 2>&1 && notify "$(t 'Network forgotten' 'Rede esquecida')" "$ssid" ;;
+    conectar)    conectar "$ssid" ;;
   esac
 }
 
 main(){
+  local msg
+  if ! have nmcli; then
+    msg=$(t 'nmcli not found: install NetworkManager (sudo pacman -S networkmanager) and enable NetworkManager.service' \
+            'nmcli não encontrado: instale o NetworkManager (sudo pacman -S networkmanager) e ative o NetworkManager.service')
+    printf 'wifi-menu: %s\n' "$msg" >&2; notify "Wi-Fi" "$msg"; exit 1
+  fi
+  if ! have rofi; then
+    msg=$(t 'rofi not found: install it with sudo pacman -S rofi' 'rofi não encontrado: instale com sudo pacman -S rofi')
+    printf 'wifi-menu: %s\n' "$msg" >&2; notify "Wi-Fi" "$msg"; exit 1
+  fi
+  setup_theme
   carregar
 
   local -a menu
-  menu=("${LINHAS[@]}" "$ICON_SCAN  procurar redes" "$ICON_CFG  ajustes avancados (nmtui)")
+  menu=("${LINHAS[@]}" "$ICON_SCAN  $(t 'scan for networks' 'procurar redes')" "$ICON_CFG  $(t 'advanced settings (nmtui)' 'ajustes avançados (nmtui)')")
 
   local i
-  i=$(printf '%s\n' "${menu[@]}" | ROFI -dmenu -i -no-custom -format i -p "wi-fi")
-  [ -z "${i:-}" ] && exit 0
+  i=$(printf '%s\n' "${menu[@]}" | ROFI "$(t 'filter networks' 'filtrar redes')" -dmenu -i -no-custom -format i -p "wi-fi")
+  [[ "${i:-}" =~ ^[0-9]+$ ]] || exit 0
 
   local n=${#SSIDS[@]}
   if   [ "$i" -eq "$n" ]; then
@@ -134,7 +177,8 @@ main(){
     sleep 2
     exec "$0"
   elif [ "$i" -eq $(( n + 1 )) ]; then
-    setsid kitty -e nmtui >/dev/null 2>&1 < /dev/null &
+    # terminal do usuario ($TERMINAL), kitty como padrao do Hyprism
+    setsid "${TERMINAL:-kitty}" -e nmtui >/dev/null 2>&1 < /dev/null &
     exit 0
   fi
 

@@ -1,0 +1,17 @@
+"$schema" = 'https://starship.rs/config-schema.json'
+add_newline = true
+command_timeout = 1000
+format = """[╭─](bold #8b0000) $directory$git_branch$git_status
+[╰─](bold #8b0000)$character"""
+[directory]
+style = "bold #ff8080"
+truncation_length = 4
+format = "[$path]($style)"
+[git_branch]
+symbol = " "
+format = "[ $symbol$branch](#e0607f)"
+[git_status]
+format = "[ $all_status$ahead_behind](red)"
+[character]
+success_symbol = "[❯](bold #e60000)"
+error_symbol = "[❯](bold red)"

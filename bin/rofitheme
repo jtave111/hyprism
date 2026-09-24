@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 # =====================================================================
-#  rofitheme  -  central de personalizacao do launcher (rofi)
-#  sem argumentos ....... abre o menu
-#  rofitheme <paleta> .... aplica uma paleta direto
-#  rofitheme layout ...... minimal (mono) ou spotlight (arredondado)
-#  rofitheme janela | fonte | moldura | grade | densidade | prompt
-#  rofitheme busca | comportamento | opacidade | posicao | icones
-#  rofitheme testar ...... abre o launcher pra ver como ficou
-#  rofitheme sync ........ usa o tema global ativo do Hyprland
-#  rofitheme set CHAVE VALOR ... configuracao direta para outras centrais
-#  rofitheme status ...... mostra o estado sem abrir menu nem pausar
-#  rofitheme -l lista   -r aleatorio   -g regera paletas   -h ajuda
+#  rofitheme  -  Rofi launcher customization center (part of Hyprism)
+#  no arguments .......... opens the visual center (Hyprism or the menu)
+#  rofitheme menu ........ opens the built-in menu
+#  rofitheme <palette> ... applies a palette directly
+#  rofitheme layout ...... minimal (mono) or spotlight (rounded)
+#  rofitheme window | font | frame | grid | density | prompt
+#  rofitheme search | behavior | opacity | position | icons
+#  rofitheme test ........ opens the launcher to see the result
+#  rofitheme sync ........ follows the active global Hyprland theme
+#  rofitheme set KEY VALUE ... direct configuration for other tools
+#  rofitheme status ...... prints the state without menus or pauses
+#  rofitheme -l list   -r random   -g regenerate palettes   -h help
+#  Portuguese subcommands keep working (paleta, janela, fonte, ...).
 # =====================================================================
 set -u
 RDIR="$HOME/.config/rofi"
@@ -22,16 +24,93 @@ CUR="$TD/current.rasi"
 STATE="$TD/.active"
 SET="$TD/.state"
 KTD="$HOME/.config/kitty/themes"
-SELF="$(command -v rofitheme 2>/dev/null || printf '%s' "$0")"
+# O proprio arquivo (resolvendo o symlink de ~/.local/bin): as previas do
+# fzf chamam exatamente este script, e lib/ e share/ ficam ao lado de bin/.
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+SELFQ=$(printf '%q' "$SELF")
+HYPRISM_ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
+SHARE="$HYPRISM_ROOT/share"
 mkdir -p "$PAL" "$LAY"
 
 have(){ command -v "$1" >/dev/null 2>&1; }
 
-# ---------- estilo do seletor (mesmo do kittytheme) ----------
-FZF(){ fzf --height=92% --layout=reverse --border=rounded --info=inline-right --ansi --no-separator \
-  --margin=1 --padding=1 --gap=1 --pointer='▸' --marker='✓' --scrollbar='│' \
-  --color='bg:-1,bg+:#1b1111,fg:#b8b8b8,fg+:#ffffff,hl:#ff4a4a,hl+:#ff6a6a:bold,pointer:#ff2b2b,prompt:#ff2b2b:bold,marker:#ff6a6a,info:#666666,header:#888888,border:#5a0000,gutter:-1' \
-  "$@"; }
+# ---------- idioma (segue 'hyprism lang en|pt'; padrao en) ----------
+LANGX=$(grep -m1 '^lang=' "$HOME/.config/hypr/themes/.state" 2>/dev/null | cut -d= -f2-)
+[ "$LANGX" = pt ] || LANGX=en
+t(){ if [ "$LANGX" = pt ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }   # t "english" "português"
+tn(){ t "$@"; printf '\n'; }
+# tf "fmt en" "fmt pt" args...  (printf com formato traduzido)
+tf(){ local f; f=$(t "$1" "$2"); shift 2; # shellcheck disable=SC2059
+  printf "$f" "$@"; }
+
+# ---------- estilo do seletor (lib/ui.sh, igual ao resto do Hyprism) ----------
+if [ -f "$HYPRISM_ROOT/lib/ui.sh" ]; then
+  # shellcheck source=../lib/ui.sh
+  . "$HYPRISM_ROOT/lib/ui.sh"
+  ui_init
+  FZF(){ ui_fzf --with-shell='bash -c' \
+      --border-label=" ${UI_E_BAR} HYPRISM ${UI_E_RST} " --input-label=" $(t search buscar) " \
+      --footer="$(ui_keys ENTER "$(t open abrir)" ESC "$(t back voltar)")" "$@"; }
+else
+  # sem lib/ui.sh (script copiado sozinho): fzf simples, mesmo comportamento
+  UI_E_BAR='' UI_E_RST='' UI_E_DIM=''
+  ui_title(){ printf '[ %s ]\n' "$1"; }
+  ui_kv(){ printf '  %-15s %s\n' "$1" "$2"; }
+  ui_keys(){ local o=''; while [ $# -ge 2 ]; do o+="$1 $2   "; shift 2; done; printf '%s' "$o"; }
+  FZF(){ fzf --height=100% --layout=reverse --ansi --cycle --with-shell='bash -c' "$@"; }
+fi
+keys_apply(){ ui_keys ENTER "$(t apply aplicar)" ESC "$(t back voltar)"; }
+
+# row KEY LABEL [DETAIL] -> "KEY<TAB>LABEL   DETAIL". O fzf mostra do campo 2
+# em diante; a KEY nunca e traduzida e e ela que os menus usam para decidir.
+ROW_W=16
+row(){
+  local n pad=''
+  if [ -n "${3:-}" ]; then n=$(( ROW_W - ${#2} )); [ "$n" -lt 2 ] && n=2; printf -v pad '%*s' "$n" ''; fi
+  printf '%s\t%s%s%s\n' "$1" "$2" "$pad" "${3:-}"
+}
+# menu CRUMB HEADER [flags do fzf] < linhas   -> imprime a KEY escolhida
+# CRUMB e o local mostrado como caminho de shell: hyprism:/rofi/janela $
+menu(){
+  local crumb="$1" header="$2" title sel; shift 2
+  title="${crumb##*/}"; [ -n "$crumb" ] || title='rofi launcher'
+  sel=$(FZF --delimiter=$'\t' --with-nth=2.. --prompt="hyprism:/rofi${crumb:+/$crumb} \$ " \
+        --list-label=" ${title^^} " --header="$header" --header-first "$@") || return 1
+  printf '%s' "${sel%%$'\t'*}"
+}
+
+# valores canonicos (gravados no estado) exibidos no idioma atual
+vl(){ case "${1:-}" in
+  centro) t center centro ;; topo) t top topo ;; baixo) t bottom baixo ;;
+  esquerda) t left esquerda ;; direita) t right direita ;;
+  sup-esquerda) t top-left sup-esquerda ;; sup-direita) t top-right sup-direita ;;
+  inf-esquerda) t bottom-left inf-esquerda ;; inf-direita) t bottom-right inf-direita ;;
+  compacta) t compact compacta ;; confortavel) t comfortable confortável ;;
+  texto) t text texto ;; true) t on ligado ;; false) t off desligado ;;
+  '') printf -- '-' ;; *) printf '%s' "$1" ;;
+esac; }
+
+# ---------- arquivos que acompanham o Hyprism (instalacao nova) ----------
+# Copia de share/ so o que falta; nunca sobrescreve arquivo do usuario.
+seed_files(){
+  local f
+  for f in "$SHARE"/rofi/layouts/*.rasi; do
+    [ -e "$f" ] || continue
+    [ -e "$LAY/${f##*/}" ] || cp "$f" "$LAY/"
+  done
+  if [ ! -e "$RCONF" ]; then
+    if [ -f "$SHARE/rofi/config.rasi" ]; then cp "$SHARE/rofi/config.rasi" "$RCONF"
+    else printf 'configuration {\n}\n' > "$RCONF"; fi
+  fi
+}
+# temas do kitty que originam as paletas: os do usuario ou, sem eles, os do Hyprism
+kitty_theme_src(){
+  local f
+  for f in "$KTD"/*.conf; do
+    [ -e "$f" ] && [ "${f##*/}" != current.conf ] && { printf '%s' "$KTD"; return; }
+  done
+  if [ -d "$SHARE/kitty/themes" ]; then printf '%s' "$SHARE/kitty/themes"; else printf '%s' "$KTD"; fi
+}
 
 # ---------- estado ----------
 sget(){ grep -m1 "^$1=" "$SET" 2>/dev/null | cut -d= -f2-; }
@@ -198,14 +277,15 @@ EOF
 }
 
 gen_palettes(){
-  if [ ! -d "$KTD" ]; then echo "  temas do kitty nao encontrados em $KTD"; return 1; fi
-  local n=0 f
-  for f in "$KTD"/*.conf; do
+  local src n=0 f
+  src=$(kitty_theme_src)
+  if [ ! -d "$src" ]; then tf '  kitty themes not found in %s\n' '  temas do kitty não encontrados em %s\n' "$src"; return 1; fi
+  for f in "$src"/*.conf; do
     [ -e "$f" ] || continue
     case "$(basename "$f")" in current.conf) continue;; esac
     gen_one "$f" >/dev/null && n=$((n+1))
   done
-  printf '  %d paletas geradas em %s\n' "$n" "${PAL/#$HOME/\~}"
+  tf '  %d palettes generated in %s\n' '  %d paletas geradas em %s\n' "$n" "${PAL/#$HOME/\~}"
 }
 
 palettes(){ find "$PAL" -maxdepth 1 -name '*.rasi' -printf '%f\n' 2>/dev/null | sed 's/\.rasi$//' | sort; }
@@ -214,7 +294,7 @@ layouts(){  find "$LAY" -maxdepth 1 -name '*.rasi' -printf '%f\n' 2>/dev/null | 
 # ---------- montar o current.rasi ----------
 ensure_conf(){
   # garante que o config.rasi aponta pro current.rasi
-  if ! grep -q 'themes/current.rasi' "$RCONF" 2>/dev/null; then
+  if ! grep -qE '^[[:space:]]*@theme.*themes/current\.rasi' "$RCONF" 2>/dev/null; then
     if grep -qE '^\s*@theme' "$RCONF" 2>/dev/null; then
       sed -i -E "s|^\s*@theme.*|@theme \"$CUR\"|" "$RCONF"
     else printf '\n@theme "%s"\n' "$CUR" >> "$RCONF"; fi
@@ -278,13 +358,14 @@ rebuild(){
   [ "$layout" = spotlight ] && font_input=$((fs + 1))
   element_radius=$(( radius * 2 / 3 ))
 
+  # o texto de dica do campo de busca segue o idioma do Hyprism
   prompt_enabled=false; prompt_symbol=""; prompt_placeholder=""
   case "$prompt" in
     native-minimal)   prompt_enabled=true;  prompt_symbol="❯" ;;
-    native-spotlight) prompt_enabled=false; prompt_placeholder="Buscar" ;;
+    native-spotlight) prompt_enabled=false; prompt_placeholder="$(t Search Buscar)" ;;
     shell)  prompt_enabled=true;  prompt_symbol="❯" ;;
-    search) prompt_enabled=false; prompt_symbol="⌕"; prompt_placeholder="Buscar aplicativos" ;;
-    texto)  prompt_enabled=false; prompt_placeholder="Digite para buscar" ;;
+    search) prompt_enabled=false; prompt_symbol="⌕"; prompt_placeholder="$(t 'Search apps' 'Buscar aplicativos')" ;;
+    texto)  prompt_enabled=false; prompt_placeholder="$(t 'Type to search' 'Digite para buscar')" ;;
     none)   prompt_enabled=false ;;
   esac
   counter_enabled="$counter"
@@ -301,14 +382,14 @@ rebuild(){
     inf-direita)   win_loc=southeast; win_anchor=southeast; xoff=-60; yoff=-60 ;;
   esac
 
-  # Acento compartilhado: o 'hyprtheme bordas' grava a cor escolhida (ja com
+  # Acento compartilhado: o 'hyprism bordas' grava a cor escolhida (ja com
   # o ajuste de brilho) em ~/.config/hypr/accent. Se existir, ela manda —
   # e o launcher fica com a mesma cor do Hyprland e da barra.
   local shared="$HOME/.config/hypr/accent" acc_ov
   if [ -f "$shared" ]; then
     acc_ov=$(grep -oE '#[0-9A-Fa-f]{6}' "$shared" | head -1)
     if [ -n "${acc_ov:-}" ]; then
-      # tom claro derivado, mesma regra do hyprtheme
+      # tom claro derivado, mesma regra do hyprism
       lit=$(mix "$acc_ov" "#FFFFFF" 70)
     fi
   fi
@@ -380,27 +461,31 @@ rebuild(){
   } > "$CUR"
   ensure_conf
   sync_rofi_config
+  if ! have rofi; then
+    tn '  rofi is not installed: theme written but not validated' '  rofi não instalado: tema gravado, mas sem validação'
+    return 0
+  fi
   # Valida de duas formas: o warning explicito do rofi e, principalmente, o
   # tamanho do tema resolvido -- o rofi tambem descarta blocos EM SILENCIO
   # (exit 0, stderr vazio), e ai so o tamanho do dump denuncia.
   local err
   err=$(rofi -dump-theme 2>&1 >/dev/null | grep -i 'failed to parse')
-  if [ -n "$err" ]; then printf '  ATENCAO: o rofi nao aceitou o tema:\n  %s\n' "$err"; return 1; fi
+  if [ -n "$err" ]; then tf '  WARNING: rofi rejected the theme:\n  %s\n' '  ATENÇÃO: o rofi não aceitou o tema:\n  %s\n' "$err"; return 1; fi
   # O rofi mescla o tema sobre o padrao dele, entao contar linhas nao serve:
   # a checagem e se um valor NOSSO chegou ao tema resolvido.
   if ! rofi -dump-theme 2>/dev/null | grep -q 'win-width'; then
-    printf '  ATENCAO: o rofi descartou o tema em silencio.\n'
-    printf '  Causa comum: a sequencia barra-asterisco dentro de um comentario\n'
-    printf '  (o rofi entende como comentario aninhado e engole o resto).\n'
+    tn '  WARNING: rofi silently discarded the theme.' '  ATENÇÃO: o rofi descartou o tema em silêncio.'
+    tn '  Common cause: the slash-asterisk sequence inside a comment' '  Causa comum: a sequência barra-asterisco dentro de um comentário'
+    tn '  (rofi reads it as a nested comment and swallows the rest).' '  (o rofi entende como comentário aninhado e engole o resto).'
     return 1
   fi
   return 0
 }
 
 apply_palette(){
-  if [ ! -f "$PAL/$1.rasi" ]; then echo "  paleta '$1' inexistente (rofitheme -l)"; return 1; fi
+  if [ ! -f "$PAL/$1.rasi" ]; then tf "  palette '%s' does not exist (rofitheme -l)\n" "  paleta '%s' inexistente (rofitheme -l)\n" "$1"; return 1; fi
   printf '%s\n' "$1" > "$STATE"
-  rebuild && printf '  paleta: %s  (layout %s)\n' "$1" "$(sget layout)"
+  rebuild && tf '  palette: %s  (layout %s)\n' '  paleta: %s  (layout %s)\n' "$1" "$(sget layout)"
 }
 
 # ---------- previa: rofi de verdade, em modo dmenu (nao executa nada) ----------
@@ -413,14 +498,16 @@ demo(){
 pv(){ grep -m1 -E "^\s*$2:" "$1" | grep -oE '#[0-9A-Fa-f]{6}'; }
 
 preview_palette(){
-  local p="$PAL/$1.rasi"
-  [ -f "$p" ] || { echo "sem paleta"; return; }
+  local p="$PAL/$1.rasi" src
+  [ -f "$p" ] || { tn 'no palette' 'sem paleta'; return; }
   local bgc fgc dimc linec acc lit sbg sfg W=44
   bgc=$(pv "$p" bg); fgc=$(pv "$p" fg); dimc=$(pv "$p" dim); linec=$(pv "$p" line)
   acc=$(pv "$p" accent); lit=$(pv "$p" 'accent-lit'); sbg=$(pv "$p" 'sel-bg'); sfg=$(pv "$p" 'sel-fg')
+  src=$(kitty_theme_src)
 
-  printf 'paleta   %s\n' "$1"
-  printf 'origem   ~/.config/kitty/themes/%s.conf\n\n' "$1"
+  ui_title "$1"
+  ui_kv "$(t source origem)" "${src/#$HOME/\~}/$1.conf"
+  printf '\n'
 
   local B; B=$(abg "$bgc")
   # linha de busca
@@ -444,79 +531,101 @@ preview_palette(){
   printf '\n'
   printf '%s   %s bg %s\n' "$(abg "$bgc")    $Z" '' "$bgc"
   printf '%s   %s fg %s\n' "$(abg "$fgc")    $Z" '' "$fgc"
-  printf '%s   %s acento %s\n' "$(abg "$acc")    $Z" '' "$acc"
-  printf '%s   %s selecao %s\n' "$(abg "$sbg")    $Z" '' "$sbg"
+  printf '%s   %s %s %s\n' "$(abg "$acc")    $Z" '' "$(t accent acento)" "$acc"
+  printf '%s   %s %s %s\n' "$(abg "$sbg")    $Z" '' "$(t selection seleção)" "$sbg"
 }
 
 preview_layout(){
   local f="$LAY/$1.rasi"
-  [ -f "$f" ] || { echo "sem layout"; return; }
+  [ -f "$f" ] || { tn 'no layout' 'sem layout'; return; }
+  ui_title "$1"
   case "$1" in
-    minimal)   echo "minimal — mono, cantos retos, sem icones,";
-               echo "          contador N/total, barra no item ativo.";;
-    spotlight) echo "spotlight — arredondado, com icones grandes,";
-               echo "            item ativo pintado com o acento.";;
-    *)         echo "$1";;
+    minimal)   tn '  mono, square corners, no icons,' '  mono, cantos retos, sem ícones,'
+               tn '  N/total counter, bar on the active item.' '  contador N/total, barra no item ativo.' ;;
+    spotlight) tn '  rounded, with large icons,' '  arredondado, com ícones grandes,'
+               tn '  active item painted with the accent.' '  item ativo pintado com o acento.' ;;
   esac
   echo; sed -n '1,6p' "$f"
   echo; grep -E '^\s*(width|border-radius|lines|padding):' "$f" | sed 's/^\s*/  /' | head -8
 }
 
 # ---------- configuracao validada (usada pelos menus e pela CLI) ----------
+# Chaves e valores aceitam ingles e portugues; o estado guarda sempre o
+# valor canonico historico (ex.: pos=centro, density=confortavel).
+norm_key(){ case "$1" in
+  fonte|font|font-family|font-face) printf font_face ;;
+  tamanho-fonte|font-size) printf font_size ;;
+  borda) printf border ;;
+  cantos|raio|corners) printf radius ;;
+  densidade) printf density ;;
+  colunas) printf columns ;;
+  espaco|espacamento|spacing|gap) printf row_gap ;;
+  tamanho-icone|icon-size) printf icon_size ;;
+  contador) printf counter ;;
+  rolagem) printf scrollbar ;;
+  busca|search) printf matching ;;
+  ordenacao) printf sorting ;;
+  ordenar|sort) printf sort_enabled ;;
+  maiusculas|case) printf case_mode ;;
+  tokens) printf tokenize ;;
+  circular) printf cycle ;;
+  mouse) printf hover ;;
+  clique-fora|click-outside) printf click_exit ;;
+  formato|format) printf drun_format ;;
+  largura) printf width ;;
+  linhas) printf lines ;;
+  posicao|position) printf pos ;;
+  opacidade) printf opacity ;;
+  icones) printf icons ;;
+  paleta) printf palette ;;
+  *) printf '%s' "$1" ;;
+esac; }
+norm_value(){ case "$1:$2" in
+  pos:center) printf centro ;; pos:top) printf topo ;; pos:bottom) printf baixo ;;
+  pos:left) printf esquerda ;; pos:right) printf direita ;;
+  pos:top-left) printf sup-esquerda ;; pos:top-right) printf sup-direita ;;
+  pos:bottom-left) printf inf-esquerda ;; pos:bottom-right) printf inf-direita ;;
+  density:compact) printf compacta ;; density:comfortable) printf confortavel ;;
+  prompt:text) printf texto ;;
+  *) printf '%s' "$2" ;;
+esac; }
+
 set_value(){
-  local key="$1" value="$2"
+  local key value
+  key=$(norm_key "$1"); value=$(norm_value "$key" "$2")
   case "$key" in
-    fonte|font|font-family) key=font_face ;;
-    tamanho-fonte|font-size) key=font_size ;;
-    borda) key=border ;;
-    cantos|raio) key=radius ;;
-    densidade) key=density ;;
-    colunas) key=columns ;;
-    espaco|espacamento) key=row_gap ;;
-    tamanho-icone) key=icon_size ;;
-    contador) key=counter ;;
-    rolagem) key=scrollbar ;;
-    busca) key=matching ;;
-    ordenacao) key=sorting ;;
-    ordenar) key=sort_enabled ;;
-    maiusculas) key=case_mode ;;
-    tokens) key=tokenize ;;
-    circular) key=cycle ;;
-    mouse) key=hover ;;
-    clique-fora) key=click_exit ;;
-    formato) key=drun_format ;;
-    largura) key=width ;;
-    linhas) key=lines ;;
-    posicao) key=pos ;;
-    opacidade) key=opacity ;;
-    icones) key=icons ;;
-  esac
-  case "$key" in
-    layout) [ -f "$LAY/$value.rasi" ] || { echo "layout invalido: $value" >&2; return 2; } ;;
-    width) valid_int "$value" 360 1600 || { echo "largura: use 360..1600" >&2; return 2; } ;;
-    lines) valid_int "$value" 3 30 || { echo "linhas: use 3..30" >&2; return 2; } ;;
-    pos) case "$value" in centro|topo|baixo|esquerda|direita|sup-esquerda|sup-direita|inf-esquerda|inf-direita) :;; *) echo "posicao invalida: $value" >&2; return 2;; esac ;;
-    opacity) valid_int "$value" 40 100 || { echo "opacidade: use 40..100" >&2; return 2; } ;;
+    layout) [ -f "$LAY/$value.rasi" ] || { tf 'invalid layout: %s\n' 'layout inválido: %s\n' "$value" >&2; return 2; } ;;
+    width) valid_int "$value" 360 1600 || { tn 'width: use 360..1600' 'largura: use 360..1600' >&2; return 2; } ;;
+    lines) valid_int "$value" 3 30 || { tn 'lines: use 3..30' 'linhas: use 3..30' >&2; return 2; } ;;
+    pos) case "$value" in centro|topo|baixo|esquerda|direita|sup-esquerda|sup-direita|inf-esquerda|inf-direita) :;;
+           *) tf 'invalid position: %s\n' 'posição inválida: %s\n' "$value" >&2; return 2;; esac ;;
+    opacity) valid_int "$value" 40 100 || { tn 'opacity: use 40..100' 'opacidade: use 40..100' >&2; return 2; } ;;
     font_face)
       if [ "$value" != auto ] && { [[ "$value" =~ [\;\{\}\"] ]] || [ -z "$value" ]; }; then
-        echo "nome de fonte invalido" >&2; return 2
+        tn 'invalid font name' 'nome de fonte inválido' >&2; return 2
       fi ;;
-    font_size) [ "$value" = auto ] || valid_int "$value" 8 28 || { echo "tamanho da fonte: auto ou 8..28" >&2; return 2; } ;;
-    border) [ "$value" = auto ] || valid_int "$value" 0 8 || { echo "borda: auto ou 0..8" >&2; return 2; } ;;
-    radius) [ "$value" = auto ] || valid_int "$value" 0 48 || { echo "cantos: auto ou 0..48" >&2; return 2; } ;;
-    density) case "$value" in compacta|normal|confortavel) :;; *) echo "densidade: compacta, normal ou confortavel" >&2; return 2;; esac ;;
-    columns) valid_int "$value" 1 4 || { echo "colunas: use 1..4" >&2; return 2; } ;;
-    row_gap) [ "$value" = auto ] || valid_int "$value" 0 20 || { echo "espacamento: auto ou 0..20" >&2; return 2; } ;;
-    icon_size) [ "$value" = auto ] || valid_int "$value" 12 64 || { echo "icone: auto ou 12..64" >&2; return 2; } ;;
-    prompt) case "$value" in auto|shell|search|texto|none) :;; *) echo "prompt: auto, shell, search, texto ou none" >&2; return 2;; esac ;;
-    counter) [ "$value" = auto ] || valid_bool "$value" || { echo "contador: auto, true ou false" >&2; return 2; } ;;
-    scrollbar|sort_enabled|tokenize|cycle|hover|click_exit) valid_bool "$value" || { echo "$key: use true ou false" >&2; return 2; } ;;
-    matching) case "$value" in normal|regex|glob|fuzzy|prefix) :;; *) echo "busca: normal, regex, glob, fuzzy ou prefix" >&2; return 2;; esac ;;
-    sorting) case "$value" in fzf|levenshtein) :;; *) echo "ordenacao: fzf ou levenshtein" >&2; return 2;; esac ;;
-    case_mode) case "$value" in ignore|smart|sensitive) :;; *) echo "maiusculas: ignore, smart ou sensitive" >&2; return 2;; esac ;;
-    drun_format) case "$value" in name|generic|exec) :;; *) echo "formato: name, generic ou exec" >&2; return 2;; esac ;;
-    icons) valid_bool "$value" || { echo "icones: use true ou false" >&2; return 2; }; set_icons "$value"; return 0 ;;
-    *) echo "chave desconhecida: $key" >&2; return 2 ;;
+    font_size) [ "$value" = auto ] || valid_int "$value" 8 28 || { tn 'font size: auto or 8..28' 'tamanho da fonte: auto ou 8..28' >&2; return 2; } ;;
+    border) [ "$value" = auto ] || valid_int "$value" 0 8 || { tn 'border: auto or 0..8' 'borda: auto ou 0..8' >&2; return 2; } ;;
+    radius) [ "$value" = auto ] || valid_int "$value" 0 48 || { tn 'corners: auto or 0..48' 'cantos: auto ou 0..48' >&2; return 2; } ;;
+    density) case "$value" in compacta|normal|confortavel) :;;
+           *) tn 'density: compact, normal or comfortable' 'densidade: compacta, normal ou confortavel' >&2; return 2;; esac ;;
+    columns) valid_int "$value" 1 4 || { tn 'columns: use 1..4' 'colunas: use 1..4' >&2; return 2; } ;;
+    row_gap) [ "$value" = auto ] || valid_int "$value" 0 20 || { tn 'spacing: auto or 0..20' 'espaçamento: auto ou 0..20' >&2; return 2; } ;;
+    icon_size) [ "$value" = auto ] || valid_int "$value" 12 64 || { tn 'icon: auto or 12..64' 'ícone: auto ou 12..64' >&2; return 2; } ;;
+    prompt) case "$value" in auto|shell|search|texto|none) :;;
+           *) tn 'prompt: auto, shell, search, text or none' 'prompt: auto, shell, search, texto ou none' >&2; return 2;; esac ;;
+    counter) [ "$value" = auto ] || valid_bool "$value" || { tn 'counter: auto, true or false' 'contador: auto, true ou false' >&2; return 2; } ;;
+    scrollbar|sort_enabled|tokenize|cycle|hover|click_exit)
+      valid_bool "$value" || { tf '%s: use true or false\n' '%s: use true ou false\n' "$key" >&2; return 2; } ;;
+    matching) case "$value" in normal|regex|glob|fuzzy|prefix) :;;
+           *) tn 'search: normal, regex, glob, fuzzy or prefix' 'busca: normal, regex, glob, fuzzy ou prefix' >&2; return 2;; esac ;;
+    sorting) case "$value" in fzf|levenshtein) :;; *) tn 'sorting: fzf or levenshtein' 'ordenação: fzf ou levenshtein' >&2; return 2;; esac ;;
+    case_mode) case "$value" in ignore|smart|sensitive) :;;
+           *) tn 'case: ignore, smart or sensitive' 'maiúsculas: ignore, smart ou sensitive' >&2; return 2;; esac ;;
+    drun_format) case "$value" in name|generic|exec) :;;
+           *) tn 'format: name, generic or exec' 'formato: name, generic ou exec' >&2; return 2;; esac ;;
+    icons) valid_bool "$value" || { tn 'icons: use true or false' 'ícones: use true ou false' >&2; return 2; }; set_icons "$value"; return 0 ;;
+    *) tf 'unknown key: %s\n' 'chave desconhecida: %s\n' "$key" >&2; return 2 ;;
   esac
   sset "$key" "$value"
 }
@@ -524,36 +633,48 @@ set_value(){
 apply_setting(){
   local key="$1" value="$2" label="${3:-$1}"
   set_value "$key" "$value" || return
-  rebuild && printf '  %s: %s\n' "$label" "$value"
+  rebuild && printf '  %s: %s\n' "$label" "$(vl "$(norm_value "$(norm_key "$key")" "$value")")"
 }
 
+# pick_bool CRUMB ATUAL -> true|false
 pick_bool(){
-  local prompt="$1" current="$2" sel
-  sel=$(printf 'true\tligado\nfalse\tdesligado' | FZF --delimiter=$'\t' --with-nth=1,2 \
-      --prompt="$prompt (agora: $current) > " --header='ENTER escolhe   ESC volta')
-  [ -n "${sel:-}" ] && printf '%s' "${sel%%$'\t'*}"
+  { row true "$(t on ligado)"; row false "$(t off desligado)"; } \
+    | menu "$1" "$(t current atual): $(vl "$2")" --footer="$(keys_apply)"
 }
 
+# pick_number "VALOR  descricao\n..." CRUMB HEADER -> VALOR (primeira palavra)
 pick_number(){
-  local values="$1" prompt="$2" header="$3" sel
-  sel=$(printf '%b' "$values" | FZF --prompt="$prompt > " --header="$header")
-  [ -n "${sel:-}" ] && printf '%s' "${sel%% *}"
+  local values="$1" crumb="$2" header="$3" line
+  printf '%b' "$values" | while IFS= read -r line; do
+    [ -n "$line" ] && printf '%s\t%s\n' "${line%% *}" "$line"
+  done | menu "$crumb" "$header" --footer="$(keys_apply)"
 }
 
 # ---------- pickers ----------
 pick_palette(){
   [ -z "$(palettes)" ] && gen_palettes
-  local sel; sel=$(palettes | FZF --prompt='paleta > ' \
-      --preview "$SELF __prev {1}" --preview-window='right,58%,border-left' \
-      --header='ENTER aplica e abre o launcher pra ver   ESC volta')
+  local sel act p mark
+  act=$(cat "$STATE" 2>/dev/null)
+  sel=$(palettes | while read -r p; do
+          mark=''; [ "$p" = "$act" ] && mark="  ● $(t active ativa)"
+          printf '%s\t%s%s\n' "$p" "$p" "$mark"
+        done | menu "$(t palette paleta)" \
+          "$(t 'the launcher opens after applying, so you can see it' 'o launcher abre depois de aplicar, para você ver')" \
+          --preview "$SELFQ __prev {1}" --preview-window='right,58%,border-sharp' \
+          --preview-label=" $(t preview prévia) " --footer="$(keys_apply)")
   [ -z "${sel:-}" ] && return 0
   apply_palette "$sel" && demo
 }
 
 pick_layout(){
-  local sel; sel=$(layouts | FZF --prompt='layout > ' \
-      --preview "$SELF __lprev {1}" --preview-window='right,58%,border-left' \
-      --header='estrutura da janela   ENTER aplica')
+  local sel act p mark
+  act=$(sget layout)
+  sel=$(layouts | while read -r p; do
+          mark=''; [ "$p" = "$act" ] && mark="  ● $(t active ativo)"
+          printf '%s\t%s%s\n' "$p" "$p" "$mark"
+        done | menu layout "$(t 'window structure' 'estrutura da janela')" \
+          --preview "$SELFQ __lprev {1}" --preview-window='right,58%,border-sharp' \
+          --preview-label=" $(t preview prévia) " --footer="$(keys_apply)")
   [ -z "${sel:-}" ] && return 0
   sset layout "$sel"
   # spotlight combina com icones; minimal e texto puro
@@ -565,47 +686,53 @@ pick_layout(){
 }
 
 pick_width(){
-  local v; v=$(pick_number '420  muito estreito\n480  estreito\n560  equilibrado\n640\n720\n800  largo\n960  muito largo\n' \
-      'largura' "atual: $(sget width)px | largura da janela")
-  [ -n "${v:-}" ] && apply_setting width "$v" largura
+  local v; v=$(pick_number "$(t '420  very narrow\n480  narrow\n560  balanced\n640\n720\n800  wide\n960  very wide\n' \
+                                  '420  muito estreito\n480  estreito\n560  equilibrado\n640\n720\n800  largo\n960  muito largo\n')" \
+      "$(t window/width janela/largura)" "$(tf 'current: %spx | window width' 'atual: %spx | largura da janela' "$(sget width)")")
+  [ -n "${v:-}" ] && apply_setting width "$v" "$(t width largura)"
 }
 
 pick_lines(){
-  local v; v=$(pick_number '4\n6\n8\n10  equilibrado\n12\n14\n16\n20\n24\n' \
-      'linhas' "atual: $(sget lines) | resultados visiveis por coluna")
-  [ -n "${v:-}" ] && apply_setting lines "$v" linhas
+  local v; v=$(pick_number "$(t '4\n6\n8\n10  balanced\n12\n14\n16\n20\n24\n' '4\n6\n8\n10  equilibrado\n12\n14\n16\n20\n24\n')" \
+      "$(t window/lines janela/linhas)" "$(tf 'current: %s | visible results per column' 'atual: %s | resultados visíveis por coluna' "$(sget lines)")")
+  [ -n "${v:-}" ] && apply_setting lines "$v" "$(t lines linhas)"
 }
 
 pick_opacidade(){
-  local o; o=$(pick_number '100  opaco\n97\n94\n90\n85\n78\n70\n60\n' \
-      'opacidade' "atual: $(sget opacity)% | transparencia da janela")
-  [ -n "${o:-}" ] && apply_setting opacity "$o" opacidade
+  local o; o=$(pick_number "$(t '100  opaque\n97\n94\n90\n85\n78\n70\n60\n' '100  opaco\n97\n94\n90\n85\n78\n70\n60\n')" \
+      "$(t window/opacity janela/opacidade)" "$(tf 'current: %s%% | window transparency' 'atual: %s%% | transparência da janela' "$(sget opacity)")")
+  [ -n "${o:-}" ] && apply_setting opacity "$o" "$(t opacity opacidade)"
 }
 
 pick_posicao(){
-  local p; p=$(printf '%s\n' \
-      'centro          no meio, levemente acima' \
-      'topo            centro superior' \
-      'baixo           centro inferior' \
-      'esquerda        meio da lateral esquerda' \
-      'direita         meio da lateral direita' \
-      'sup-esquerda    canto superior esquerdo' \
-      'sup-direita     canto superior direito' \
-      'inf-esquerda    canto inferior esquerdo' \
-      'inf-direita     canto inferior direito' \
-      | FZF --prompt='posicao > ' --header="atual: $(sget pos) | 9 pontos de ancoragem")
+  local p; p=$({
+      row centro       "$(vl centro)"       "$(t 'middle, slightly above' 'no meio, levemente acima')"
+      row topo         "$(vl topo)"         "$(t 'top center' 'centro superior')"
+      row baixo        "$(vl baixo)"        "$(t 'bottom center' 'centro inferior')"
+      row esquerda     "$(vl esquerda)"     "$(t 'middle of the left edge' 'meio da lateral esquerda')"
+      row direita      "$(vl direita)"      "$(t 'middle of the right edge' 'meio da lateral direita')"
+      row sup-esquerda "$(vl sup-esquerda)" "$(t 'top left corner' 'canto superior esquerdo')"
+      row sup-direita  "$(vl sup-direita)"  "$(t 'top right corner' 'canto superior direito')"
+      row inf-esquerda "$(vl inf-esquerda)" "$(t 'bottom left corner' 'canto inferior esquerdo')"
+      row inf-direita  "$(vl inf-direita)"  "$(t 'bottom right corner' 'canto inferior direito')"
+    } | menu "$(t window/position janela/posição)" \
+          "$(tf 'current: %s | 9 anchor points' 'atual: %s | 9 pontos de ancoragem' "$(vl "$(sget pos)")")" --footer="$(keys_apply)")
   [ -z "${p:-}" ] && return 0
-  apply_setting pos "${p%% *}" posicao
+  apply_setting pos "$p" "$(t position posição)"
 }
+
+back_row(){ row voltar "$(t '← back' '← voltar')" "$(t 'main menu' 'menu principal')"; }
 
 window_menu(){
   while true; do
-    local c; c=$(printf '%s\n' \
-      "largura\t$(sget width)px" "linhas\t$(sget lines)" \
-      "posicao\t$(sget pos)" "opacidade\t$(sget opacity)%" "voltar\tmenu principal" \
-      | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='janela > ' \
-        --header='tamanho, quantidade de resultados e local da janela')
-    case "${c%%$'\t'*}" in
+    local c; c=$({
+      row largura   "$(t width largura)"      "$(sget width)px"
+      row linhas    "$(t lines linhas)"       "$(sget lines)"
+      row posicao   "$(t position posição)"   "$(vl "$(sget pos)")"
+      row opacidade "$(t opacity opacidade)"  "$(sget opacity)%"
+      back_row
+    } | menu "$(t window janela)" "$(t 'size, number of results and window location' 'tamanho, quantidade de resultados e local da janela')")
+    case "$c" in
       largura) pick_width;; linhas) pick_lines;; posicao) pick_posicao;;
       opacidade) pick_opacidade;; voltar|"") break;;
     esac
@@ -614,94 +741,114 @@ window_menu(){
 
 pick_font_face(){
   local sel
-  sel=$({ printf 'auto\tfonte original do layout\n'
+  sel=$({ row auto auto "$(t "layout's original font" 'fonte original do layout')"
           fc-list : family 2>/dev/null | cut -d: -f2- | tr ',' '\n' \
             | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sed '/^$/d' | sort -fu \
-            | sed 's/$/\tinstalada/'; } \
-        | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='fonte > ' \
-          --header="atual: $(sget font_face) | busca todas as fontes instaladas")
-  [ -n "${sel:-}" ] && apply_setting font_face "${sel%%$'\t'*}" fonte
+            | sed 's/.*/&\t&/'; } \
+        | menu "$(t typography/font tipografia/fonte)" \
+          "$(tf 'current: %s | searches every installed font' 'atual: %s | busca todas as fontes instaladas' "$(sget font_face)")" \
+          --footer="$(keys_apply)")
+  [ -n "${sel:-}" ] && apply_setting font_face "$sel" "$(t font fonte)"
 }
 
 pick_font_size(){
-  local v; v=$(pick_number 'auto  tamanho original do layout\n8\n9\n10\n11\n12\n13\n14\n16\n18\n20\n22\n24\n28\n' \
-      'tamanho' "atual: $(sget font_size) | tamanho base em pontos")
-  [ -n "${v:-}" ] && apply_setting font_size "$v" tamanho-da-fonte
+  local v; v=$(pick_number "$(t "auto  layout's original size\n8\n9\n10\n11\n12\n13\n14\n16\n18\n20\n22\n24\n28\n" \
+                                  'auto  tamanho original do layout\n8\n9\n10\n11\n12\n13\n14\n16\n18\n20\n22\n24\n28\n')" \
+      "$(t typography/size tipografia/tamanho)" "$(tf 'current: %s | base size in points' 'atual: %s | tamanho base em pontos' "$(sget font_size)")")
+  [ -n "${v:-}" ] && apply_setting font_size "$v" "$(t 'font size' 'tamanho da fonte')"
 }
 
 font_menu(){
   while true; do
-    local c; c=$(printf '%s\n' "familia\t$(sget font_face)" "tamanho\t$(sget font_size)" "voltar\tmenu principal" \
-      | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='tipografia > ' \
-        --header='a fonte vale para busca, resultados, contador e mensagens')
-    case "${c%%$'\t'*}" in familia) pick_font_face;; tamanho) pick_font_size;; voltar|"") break;; esac
+    local c; c=$({
+      row familia "$(t family família)" "$(sget font_face)"
+      row tamanho "$(t size tamanho)"   "$(sget font_size)"
+      back_row
+    } | menu "$(t typography tipografia)" "$(t 'the font applies to search, results, counter and messages' 'a fonte vale para busca, resultados, contador e mensagens')")
+    case "$c" in familia) pick_font_face;; tamanho) pick_font_size;; voltar|"") break;; esac
   done
 }
 
 pick_border(){
-  local v; v=$(pick_number 'auto  original do layout\n0  sem borda\n1  fina\n2\n3\n4  forte\n6\n8\n' \
-      'borda' "atual: $(sget border) | espessura em px")
-  [ -n "${v:-}" ] && apply_setting border "$v" borda
+  local v; v=$(pick_number "$(t 'auto  layout default\n0  no border\n1  thin\n2\n3\n4  strong\n6\n8\n' \
+                                  'auto  original do layout\n0  sem borda\n1  fina\n2\n3\n4  forte\n6\n8\n')" \
+      "$(t frame/border moldura/borda)" "$(tf 'current: %s | thickness in px' 'atual: %s | espessura em px' "$(sget border)")")
+  [ -n "${v:-}" ] && apply_setting border "$v" "$(t border borda)"
 }
 
 pick_radius(){
-  local v; v=$(pick_number 'auto  original do layout\n0  quadrado\n4\n8\n12\n16\n20\n24\n32\n40\n48  bem redondo\n' \
-      'cantos' "atual: $(sget radius) | raio em px")
-  [ -n "${v:-}" ] && apply_setting radius "$v" cantos
+  local v; v=$(pick_number "$(t 'auto  layout default\n0  square\n4\n8\n12\n16\n20\n24\n32\n40\n48  very round\n' \
+                                  'auto  original do layout\n0  quadrado\n4\n8\n12\n16\n20\n24\n32\n40\n48  bem redondo\n')" \
+      "$(t frame/corners moldura/cantos)" "$(tf 'current: %s | radius in px' 'atual: %s | raio em px' "$(sget radius)")")
+  [ -n "${v:-}" ] && apply_setting radius "$v" "$(t corners cantos)"
 }
 
 frame_menu(){
   while true; do
-    local c; c=$(printf '%s\n' "borda\t$(sget border)" "cantos\t$(sget radius)" "voltar\tmenu principal" \
-      | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='moldura > ' \
-        --header='contorno externo e arredondamento da janela e dos itens')
-    case "${c%%$'\t'*}" in borda) pick_border;; cantos) pick_radius;; voltar|"") break;; esac
+    local c; c=$({
+      row borda  "$(t border borda)"   "$(sget border)"
+      row cantos "$(t corners cantos)" "$(sget radius)"
+      back_row
+    } | menu "$(t frame moldura)" "$(t 'outer outline and rounding of the window and items' 'contorno externo e arredondamento da janela e dos itens')")
+    case "$c" in borda) pick_border;; cantos) pick_radius;; voltar|"") break;; esac
   done
 }
 
 pick_density(){
-  local v; v=$(printf 'compacta\tmais resultados em menos espaco\nnormal\tequilibrada, visual original\nconfortavel\tlinhas altas e mais respiro' \
-    | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='densidade > ' --header="atual: $(sget density)")
-  [ -n "${v:-}" ] && apply_setting density "${v%%$'\t'*}" densidade
+  local v; v=$({
+      row compacta    "$(vl compacta)"    "$(t 'more results in less space' 'mais resultados em menos espaço')"
+      row normal      normal              "$(t 'balanced, original look' 'equilibrada, visual original')"
+      row confortavel "$(vl confortavel)" "$(t 'tall rows and more breathing room' 'linhas altas e mais respiro')"
+    } | menu "$(t grid/density grade/densidade)" "$(t current atual): $(vl "$(sget density)")" --footer="$(keys_apply)")
+  [ -n "${v:-}" ] && apply_setting density "$v" "$(t density densidade)"
 }
 
 pick_columns(){
-  local v; v=$(pick_number '1  lista tradicional\n2  grade larga\n3\n4  grade densa\n' \
-      'colunas' "atual: $(sget columns) | aumente a largura para 2 ou mais")
-  [ -n "${v:-}" ] && apply_setting columns "$v" colunas
+  local v; v=$(pick_number "$(t '1  traditional list\n2  wide grid\n3\n4  dense grid\n' '1  lista tradicional\n2  grade larga\n3\n4  grade densa\n')" \
+      "$(t grid/columns grade/colunas)" "$(tf 'current: %s | widen the window for 2 or more' 'atual: %s | aumente a largura para 2 ou mais' "$(sget columns)")")
+  [ -n "${v:-}" ] && apply_setting columns "$v" "$(t columns colunas)"
 }
 
 pick_row_gap(){
-  local v; v=$(pick_number 'auto  acompanha a densidade\n0  sem espaco\n1\n2\n3\n4\n6\n8\n12\n16\n20\n' \
-      'espacamento' "atual: $(sget row_gap) | distancia vertical em px")
-  [ -n "${v:-}" ] && apply_setting row_gap "$v" espacamento
+  local v; v=$(pick_number "$(t 'auto  follows the density\n0  no space\n1\n2\n3\n4\n6\n8\n12\n16\n20\n' \
+                                  'auto  acompanha a densidade\n0  sem espaço\n1\n2\n3\n4\n6\n8\n12\n16\n20\n')" \
+      "$(t grid/spacing grade/espaçamento)" "$(tf 'current: %s | vertical distance in px' 'atual: %s | distância vertical em px' "$(sget row_gap)")")
+  [ -n "${v:-}" ] && apply_setting row_gap "$v" "$(t spacing espaçamento)"
 }
 
 pick_scrollbar(){
-  local v; v=$(pick_bool 'barra de rolagem' "$(sget scrollbar)")
-  [ -n "${v:-}" ] && apply_setting scrollbar "$v" barra-de-rolagem
+  local v; v=$(pick_bool "$(t grid/scrollbar grade/rolagem)" "$(sget scrollbar)")
+  [ -n "${v:-}" ] && apply_setting scrollbar "$v" "$(t scrollbar barra-de-rolagem)"
 }
 
 pick_counter(){
-  local v; v=$(printf 'auto\tsegue o layout\ntrue\tmostra filtrados/total\nfalse\tesconde o contador' \
-      | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='contador > ' --header="atual: $(sget counter)")
-  [ -n "${v:-}" ] && apply_setting counter "${v%%$'\t'*}" contador
+  local v; v=$({
+      row auto  auto        "$(t 'follows the layout' 'segue o layout')"
+      row true  "$(vl true)"  "$(t 'shows filtered/total' 'mostra filtrados/total')"
+      row false "$(vl false)" "$(t 'hides the counter' 'esconde o contador')"
+    } | menu "$(t grid/counter grade/contador)" "$(t current atual): $(vl "$(sget counter)")" --footer="$(keys_apply)")
+  [ -n "${v:-}" ] && apply_setting counter "$v" "$(t counter contador)"
 }
 
 pick_icon_size(){
-  local v; v=$(pick_number 'auto  original do layout\n12\n16\n18\n20\n24\n26\n32\n40\n48\n56\n64\n' \
-      'icone' "atual: $(sget icon_size) | tamanho em px")
-  [ -n "${v:-}" ] && apply_setting icon_size "$v" tamanho-do-icone
+  local v; v=$(pick_number "$(t 'auto  layout default\n12\n16\n18\n20\n24\n26\n32\n40\n48\n56\n64\n' \
+                                  'auto  original do layout\n12\n16\n18\n20\n24\n26\n32\n40\n48\n56\n64\n')" \
+      "$(t grid/icon-size grade/tamanho-ícone)" "$(tf 'current: %s | size in px' 'atual: %s | tamanho em px' "$(sget icon_size)")")
+  [ -n "${v:-}" ] && apply_setting icon_size "$v" "$(t 'icon size' 'tamanho do ícone')"
 }
 
 grid_menu(){
   while true; do
-    local c; c=$(printf '%s\n' \
-      "densidade\t$(sget density)" "colunas\t$(sget columns)" "espacamento\t$(sget row_gap)" \
-      "rolagem\t$(sget scrollbar)" "contador\t$(sget counter)" "tamanho-icone\t$(sget icon_size)" \
-      "voltar\tmenu principal" | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='grade > ' \
-      --header='densidade, colunas, separacao, scrollbar e escala dos icones')
-    case "${c%%$'\t'*}" in
+    local c; c=$({
+      row densidade     "$(t density densidade)"           "$(vl "$(sget density)")"
+      row colunas       "$(t columns colunas)"             "$(sget columns)"
+      row espacamento   "$(t spacing espaçamento)"         "$(sget row_gap)"
+      row rolagem       "$(t scrollbar rolagem)"           "$(vl "$(sget scrollbar)")"
+      row contador      "$(t counter contador)"            "$(vl "$(sget counter)")"
+      row tamanho-icone "$(t 'icon size' 'tamanho ícone')" "$(sget icon_size)"
+      back_row
+    } | menu "$(t grid grade)" "$(t 'density, columns, spacing, scrollbar and icon scale' 'densidade, colunas, separação, rolagem e escala dos ícones')")
+    case "$c" in
       densidade) pick_density;; colunas) pick_columns;; espacamento) pick_row_gap;;
       rolagem) pick_scrollbar;; contador) pick_counter;; tamanho-icone) pick_icon_size;;
       voltar|"") break;;
@@ -710,81 +857,85 @@ grid_menu(){
 }
 
 pick_prompt(){
-  local v; v=$(printf '%s\n' \
-      $'auto\tvisual original do layout' \
-      $'shell\tmostra o modo e o simbolo ❯' \
-      $'search\tlupa e texto "Buscar aplicativos"' \
-      $'texto\tapenas "Digite para buscar"' \
-      $'none\tcampo completamente limpo' \
-      | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='prompt > ' --header="atual: $(sget prompt)")
-  [ -n "${v:-}" ] && apply_setting prompt "${v%%$'\t'*}" prompt
+  local v; v=$({
+      row auto   auto   "$(t "layout's original look" 'visual original do layout')"
+      row shell  shell  "$(t 'shows the mode and the ❯ symbol' 'mostra o modo e o símbolo ❯')"
+      row search search "$(t 'magnifier and "Search apps" text' 'lupa e texto "Buscar aplicativos"')"
+      row texto  "$(vl texto)" "$(t 'just "Type to search"' 'apenas "Digite para buscar"')"
+      row none   none   "$(t 'completely clean field' 'campo completamente limpo')"
+    } | menu "$(t prompt/style prompt/estilo)" "$(t current atual): $(vl "$(sget prompt)")" --footer="$(keys_apply)")
+  [ -n "${v:-}" ] && apply_setting prompt "$v" prompt
 }
 
 pick_drun_format(){
-  local v; v=$(printf '%s\n' \
-      $'name\tsomente o nome do aplicativo' \
-      $'generic\tnome e descricao curta' \
-      $'exec\tnome e comando executado' \
-      | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='texto do item > ' --header="atual: $(sget drun_format)")
-  [ -n "${v:-}" ] && apply_setting drun_format "${v%%$'\t'*}" formato-dos-aplicativos
+  local v; v=$({
+      row name    name    "$(t 'app name only' 'somente o nome do aplicativo')"
+      row generic generic "$(t 'name and short description' 'nome e descrição curta')"
+      row exec    exec    "$(t 'name and executed command' 'nome e comando executado')"
+    } | menu "$(t prompt/format prompt/formato)" "$(t current atual): $(sget drun_format)" --footer="$(keys_apply)")
+  [ -n "${v:-}" ] && apply_setting drun_format "$v" "$(t 'app format' 'formato-dos-aplicativos')"
 }
 
 prompt_menu(){
   while true; do
-    local c; c=$(printf '%s\n' "estilo\t$(sget prompt)" "formato\t$(sget drun_format)" "voltar\tmenu principal" \
-      | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='campo de busca > ' \
-        --header='texto do campo e informacao exibida em cada aplicativo')
-    case "${c%%$'\t'*}" in estilo) pick_prompt;; formato) pick_drun_format;; voltar|"") break;; esac
+    local c; c=$({
+      row estilo  "$(t style estilo)"         "$(vl "$(sget prompt)")"
+      row formato "$(t 'item text' 'formato')" "$(sget drun_format)"
+      back_row
+    } | menu prompt "$(t 'field text and info shown for each app' 'texto do campo e informação exibida em cada aplicativo')")
+    case "$c" in estilo) pick_prompt;; formato) pick_drun_format;; voltar|"") break;; esac
   done
 }
 
 pick_matching(){
-  local v; v=$(printf '%s\n' \
-      $'fuzzy\tencontra letras fora de sequencia exata' \
-      $'normal\tbusca simples por texto' \
-      $'prefix\tresultado precisa comecar pelo texto' \
-      $'regex\texpressoes regulares' \
-      $'glob\tpadroes com asterisco e interrogacao' \
-      | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='algoritmo > ' --header="atual: $(sget matching)")
-  [ -n "${v:-}" ] && apply_setting matching "${v%%$'\t'*}" algoritmo-de-busca
+  local v; v=$({
+      row fuzzy  fuzzy  "$(t 'finds letters out of exact sequence' 'encontra letras fora de sequência exata')"
+      row normal normal "$(t 'plain text search' 'busca simples por texto')"
+      row prefix prefix "$(t 'result must start with the text' 'resultado precisa começar pelo texto')"
+      row regex  regex  "$(t 'regular expressions' 'expressões regulares')"
+      row glob   glob   "$(t 'patterns with asterisk and question mark' 'padrões com asterisco e interrogação')"
+    } | menu "$(t search/algorithm busca/algoritmo)" "$(t current atual): $(sget matching)" --footer="$(keys_apply)")
+  [ -n "${v:-}" ] && apply_setting matching "$v" "$(t 'search algorithm' 'algoritmo-de-busca')"
 }
 
 pick_sort_enabled(){
-  local v; v=$(pick_bool 'reordenar resultados' "$(sget sort_enabled)")
-  [ -n "${v:-}" ] && apply_setting sort_enabled "$v" ordenar-resultados
+  local v; v=$(pick_bool "$(t search/sort busca/ordenar)" "$(sget sort_enabled)")
+  [ -n "${v:-}" ] && apply_setting sort_enabled "$v" "$(t 'sort results' 'ordenar-resultados')"
 }
 
 pick_sorting(){
-  local v; v=$(printf '%s\n' \
-      $'fzf\tprioriza o melhor encaixe fuzzy' \
-      $'levenshtein\tdistancia de edicao tradicional' \
-      | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='ordenacao > ' --header="atual: $(sget sorting)")
-  [ -n "${v:-}" ] && apply_setting sorting "${v%%$'\t'*}" metodo-de-ordenacao
+  local v; v=$({
+      row fzf         fzf         "$(t 'favors the best fuzzy match' 'prioriza o melhor encaixe fuzzy')"
+      row levenshtein levenshtein "$(t 'classic edit distance' 'distância de edição tradicional')"
+    } | menu "$(t search/method busca/método)" "$(t current atual): $(sget sorting)" --footer="$(keys_apply)")
+  [ -n "${v:-}" ] && apply_setting sorting "$v" "$(t 'sorting method' 'método-de-ordenação')"
 }
 
 pick_case_mode(){
-  local v; v=$(printf '%s\n' \
-      $'ignore\tignora maiusculas e minusculas' \
-      $'smart\tdiferencia somente se voce digitar maiuscula' \
-      $'sensitive\tsempre diferencia maiusculas' \
-      | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='maiusculas > ' --header="atual: $(sget case_mode)")
-  [ -n "${v:-}" ] && apply_setting case_mode "${v%%$'\t'*}" maiusculas
+  local v; v=$({
+      row ignore    ignore    "$(t 'ignores upper and lower case' 'ignora maiúsculas e minúsculas')"
+      row smart     smart     "$(t 'case-sensitive only if you type uppercase' 'diferencia somente se você digitar maiúscula')"
+      row sensitive sensitive "$(t 'always case-sensitive' 'sempre diferencia maiúsculas')"
+    } | menu "$(t search/case busca/maiúsculas)" "$(t current atual): $(sget case_mode)" --footer="$(keys_apply)")
+  [ -n "${v:-}" ] && apply_setting case_mode "$v" "$(t case maiúsculas)"
 }
 
 pick_tokenize(){
-  local v; v=$(pick_bool 'buscar cada palavra separadamente' "$(sget tokenize)")
-  [ -n "${v:-}" ] && apply_setting tokenize "$v" busca-por-palavras
+  local v; v=$(pick_bool "$(t search/words busca/palavras)" "$(sget tokenize)")
+  [ -n "${v:-}" ] && apply_setting tokenize "$v" "$(t 'word search' 'busca-por-palavras')"
 }
 
 search_menu(){
   while true; do
-    local c; c=$(printf '%s\n' \
-      "algoritmo\t$(sget matching)" "ordenar\t$(sget sort_enabled)" \
-      "metodo\t$(sget sorting)" "maiusculas\t$(sget case_mode)" \
-      "palavras\t$(sget tokenize)" "voltar\tmenu principal" \
-      | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='busca > ' \
-        --header='como o texto digitado encontra e ordena aplicativos')
-    case "${c%%$'\t'*}" in
+    local c; c=$({
+      row algoritmo  "$(t algorithm algoritmo)" "$(sget matching)"
+      row ordenar    "$(t sort ordenar)"        "$(vl "$(sget sort_enabled)")"
+      row metodo     "$(t method método)"       "$(sget sorting)"
+      row maiusculas "$(t case maiúsculas)"     "$(sget case_mode)"
+      row palavras   "$(t words palavras)"      "$(vl "$(sget tokenize)")"
+      back_row
+    } | menu "$(t search busca)" "$(t 'how typed text finds and sorts apps' 'como o texto digitado encontra e ordena aplicativos')")
+    case "$c" in
       algoritmo) pick_matching;; ordenar) pick_sort_enabled;; metodo) pick_sorting;;
       maiusculas) pick_case_mode;; palavras) pick_tokenize;; voltar|"") break;;
     esac
@@ -792,27 +943,30 @@ search_menu(){
 }
 
 pick_cycle(){
-  local v; v=$(pick_bool 'navegacao circular' "$(sget cycle)")
-  [ -n "${v:-}" ] && apply_setting cycle "$v" navegacao-circular
+  local v; v=$(pick_bool "$(t interaction/cycle interação/circular)" "$(sget cycle)")
+  [ -n "${v:-}" ] && apply_setting cycle "$v" "$(t 'circular navigation' 'navegação-circular')"
 }
 
 pick_hover(){
-  local v; v=$(pick_bool 'selecionar ao passar o mouse' "$(sget hover)")
-  [ -n "${v:-}" ] && apply_setting hover "$v" selecao-com-mouse
+  local v; v=$(pick_bool "$(t interaction/mouse interação/mouse)" "$(sget hover)")
+  [ -n "${v:-}" ] && apply_setting hover "$v" "$(t 'mouse selection' 'seleção-com-mouse')"
 }
 
 pick_click_exit(){
-  local v; v=$(pick_bool 'fechar ao clicar fora' "$(sget click_exit)")
-  [ -n "${v:-}" ] && apply_setting click_exit "$v" clique-fora
+  local v; v=$(pick_bool "$(t interaction/click-outside interação/clique-fora)" "$(sget click_exit)")
+  [ -n "${v:-}" ] && apply_setting click_exit "$v" "$(t 'click outside' 'clique-fora')"
 }
 
 interaction_menu(){
   while true; do
-    local c; c=$(printf '%s\n' \
-      "circular\t$(sget cycle)" "mouse\t$(sget hover)" "clique-fora\t$(sget click_exit)" \
-      "voltar\tmenu principal" | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='interacao > ' \
-      --header='comportamento de teclado, ponteiro e fechamento')
-    case "${c%%$'\t'*}" in
+    local c; c=$({
+      ROW_W=32   # rotulos longos; o grupo roda em subshell, nao vaza
+      row circular    "$(t 'circular navigation' 'navegação circular')"          "$(vl "$(sget cycle)")"
+      row mouse       "$(t 'select on hover' 'selecionar ao passar o mouse')"    "$(vl "$(sget hover)")"
+      row clique-fora "$(t 'close on outside click' 'fechar ao clicar fora')"    "$(vl "$(sget click_exit)")"
+      back_row
+    } | menu "$(t interaction interação)" "$(t 'keyboard, pointer and closing behavior' 'comportamento de teclado, ponteiro e fechamento')")
+    case "$c" in
       circular) pick_cycle;; mouse) pick_hover;; clique-fora) pick_click_exit;; voltar|"") break;;
     esac
   done
@@ -827,40 +981,49 @@ set_icons(){ # true|false
 }
 icons_state(){ grep -m1 -oE 'show-icons:\s*(true|false)' "$RCONF" 2>/dev/null | awk '{print $2}'; }
 toggle_icones(){
-  local cur; cur=$(icons_state)
-  local sel; sel=$(printf 'nao   texto puro, cara de terminal\nsim   mostra o icone de cada app' \
-      | FZF --prompt="icones (agora: ${cur:-?}) > " --header='icones na lista de resultados')
+  local cur sel; cur=$(icons_state)
+  sel=$({
+      row false "$(t off não)" "$(t 'plain text, terminal look' 'texto puro, cara de terminal')"
+      row true  "$(t on sim)"  "$(t "shows each app's icon" 'mostra o ícone de cada app')"
+    } | menu "$(t icons ícones)" "$(tf 'icons in the result list | now: %s' 'ícones na lista de resultados | agora: %s' "$(vl "${cur:-?}")")" \
+        --footer="$(keys_apply)")
   [ -z "${sel:-}" ] && return 0
-  case "${sel%% *}" in sim) set_icons true;; nao) set_icons false;; esac
-  printf '  icones: %s\n' "$(icons_state)"; demo
+  case "$sel" in true) set_icons true;; false) set_icons false;; esac
+  tf '  icons: %s\n' '  ícones: %s\n' "$(vl "$(icons_state)")"; demo
 }
 
 sync_hypr(){
   local h; h=$(cat "$HOME/.config/hypr/themes/.active" 2>/dev/null)
-  if [ -z "$h" ]; then echo "  o Hyprland nao tem tema global ativo"; return 1; fi
+  if [ -z "$h" ]; then tn '  Hyprland has no active global theme' '  o Hyprland não tem tema global ativo'; return 1; fi
   [ "$h" = sddm-terminal-red ] && h=terminal-red
   [ -f "$PAL/$h.rasi" ] || gen_palettes >/dev/null
-  apply_palette "$h" && printf '  sincronizado com o tema global do Hyprland (%s)\n' "$h"
+  apply_palette "$h" && tf '  synced with the global Hyprland theme (%s)\n' '  sincronizado com o tema global do Hyprland (%s)\n' "$h"
 }
 
+# show_config [pause|plain|preview] — estado atual em "rotulo .... valor"
 show_config(){
-  echo
-  printf 'paleta          %s\n' "$(cat "$STATE" 2>/dev/null || echo '-')"
-  printf 'layout          %s\n' "$(sget layout)"
-  printf 'janela          %spx | %s linhas | %s | %s%%\n' "$(sget width)" "$(sget lines)" "$(sget pos)" "$(sget opacity)"
-  printf 'fonte           %s | tamanho %s\n' "$(sget font_face)" "$(sget font_size)"
-  printf 'moldura         borda %s | cantos %s\n' "$(sget border)" "$(sget radius)"
-  printf 'grade           %s | %s coluna(s) | gap %s\n' "$(sget density)" "$(sget columns)" "$(sget row_gap)"
-  printf 'lista           rolagem %s | contador %s\n' "$(sget scrollbar)" "$(sget counter)"
-  printf 'icones          %s | tamanho %s\n' "$(icons_state)" "$(sget icon_size)"
-  printf 'prompt          %s | itens %s\n' "$(sget prompt)" "$(sget drun_format)"
-  printf 'busca           %s | ordenar %s/%s | caso %s | tokens %s\n' \
-    "$(sget matching)" "$(sget sort_enabled)" "$(sget sorting)" "$(sget case_mode)" "$(sget tokenize)"
-  printf 'interacao       circular %s | mouse %s | clique-fora %s\n' \
-    "$(sget cycle)" "$(sget hover)" "$(sget click_exit)"
-  printf 'kitty           %s\n' "$(cat "$KTD/.active" 2>/dev/null || echo '-')"
-  printf 'atalho          SUPER + ESPAÇO\n'
-  if [ "${1:-pause}" = pause ]; then echo; read -rp "  [enter] " _; fi
+  local mode="${1:-pause}"
+  # saida redirecionada (status | grep ...): sem sequencias de cor
+  if [ "$mode" = plain ] && [ ! -t 1 ]; then
+    # shellcheck disable=SC2034  # lidas por ui_title/ui_kv (lib/ui.sh)
+    UI_E_BAR='' UI_E_RST='' UI_E_DIM='' UI_E_FG='' UI_E_RULE=''
+  fi
+  [ "$mode" = preview ] || echo
+  ui_title 'ROFI LAUNCHER'
+  ui_kv "$(t palette paleta)"          "$(cat "$STATE" 2>/dev/null || echo '-')"
+  ui_kv layout                         "$(sget layout)"
+  ui_kv "$(t window janela)"           "$(sget width)px · $(sget lines) $(t lines linhas) · $(vl "$(sget pos)") · $(sget opacity)%"
+  ui_kv "$(t font fonte)"              "$(sget font_face) · $(t size tamanho) $(sget font_size)"
+  ui_kv "$(t frame moldura)"           "$(t border borda) $(sget border) · $(t corners cantos) $(sget radius)"
+  ui_kv "$(t grid grade)"              "$(vl "$(sget density)") · $(sget columns) $(t 'column(s)' 'coluna(s)') · gap $(sget row_gap)"
+  ui_kv "$(t list lista)"              "$(t scrollbar rolagem) $(vl "$(sget scrollbar)") · $(t counter contador) $(vl "$(sget counter)")"
+  ui_kv "$(t icons ícones)"            "$(vl "$(icons_state)") · $(t size tamanho) $(sget icon_size)"
+  ui_kv prompt                         "$(vl "$(sget prompt)") · $(t items itens) $(sget drun_format)"
+  ui_kv "$(t search busca)"            "$(sget matching) · $(t sort ordenar) $(vl "$(sget sort_enabled)")/$(sget sorting) · $(t case caso) $(sget case_mode) · tokens $(vl "$(sget tokenize)")"
+  ui_kv "$(t interaction interação)"   "$(t cycle circular) $(vl "$(sget cycle)") · mouse $(vl "$(sget hover)") · $(t 'click-outside' 'clique-fora') $(vl "$(sget click_exit)")"
+  ui_kv kitty                          "$(cat "$KTD/.active" 2>/dev/null || echo '-')"
+  ui_kv "$(t shortcut atalho)"         "$(t 'SUPER + SPACE' 'SUPER + ESPAÇO')"
+  if [ "$mode" = pause ]; then echo; read -rp "  [enter] " _; fi
 }
 
 reset_settings(){
@@ -875,37 +1038,48 @@ reset_settings(){
     sset "${pair%%=*}" "${pair#*=}"
   done
   if [ "$(sget layout)" = spotlight ]; then set_icons true; else set_icons false; fi
-  rebuild && printf '  ajustes do Rofi restaurados; paleta e layout foram mantidos\n'
+  rebuild && tn '  Rofi settings restored; palette and layout were kept' '  ajustes do Rofi restaurados; paleta e layout foram mantidos'
 }
 
 confirm_reset(){
-  local c; c=$(printf 'cancelar\tnao altera nada\nrestaurar\tmantem paleta e layout' \
-    | FZF --delimiter=$'\t' --with-nth=1,2 --prompt='restaurar > ' \
-      --header='volta tamanho, fontes, grade, busca e comportamento ao padrao')
-  [ "${c%%$'\t'*}" = restaurar ] && reset_settings
+  local c; c=$({
+      row cancelar  "$(t cancel cancelar)"   "$(t 'changes nothing' 'não altera nada')"
+      row restaurar "$(t restore restaurar)" "$(t 'keeps palette and layout' 'mantém paleta e layout')"
+    } | menu "$(t reset restaurar)" "$(t 'resets size, fonts, grid, search and behavior to defaults' 'volta tamanho, fontes, grade, busca e comportamento ao padrão')")
+  [ "${c:-}" = restaurar ] && reset_settings
+}
+
+# "palette x   layout y   language EN" — o que esta ativo, acima da lista
+chips(){
+  printf '%s%s%s %s   %s%s%s %s   %s%s%s %s' \
+    "$UI_E_DIM" "$(t palette paleta)" "$UI_E_RST" "$(cat "$STATE" 2>/dev/null || echo '-')" \
+    "$UI_E_DIM" layout "$UI_E_RST" "$(sget layout)" \
+    "$UI_E_DIM" "$(t language idioma)" "$UI_E_RST" "${LANGX^^}"
 }
 
 main_menu(){
-  if ! have fzf; then echo "instale o fzf pro menu, ou use: rofitheme <paleta>"; palettes; return; fi
+  if ! have fzf; then tn 'install fzf for the menu, or use: rofitheme <palette>' 'instale o fzf para o menu, ou use: rofitheme <paleta>'; palettes; return; fi
   while true; do
-    local c; c=$(printf '%s\n' \
-      "paleta         as cores compartilhadas do tema global" \
-      "layout         minimal (mono) ou spotlight (arredondado)" \
-      "janela         tamanho, linhas, posicao e transparencia" \
-      "tipografia     familia e tamanho da fonte" \
-      "moldura        espessura da borda e cantos" \
-      "grade          densidade, colunas, espacamento e rolagem" \
-      "prompt         campo de busca e texto dos resultados" \
-      "busca          algoritmo, ordem, maiusculas e palavras" \
-      "interacao      teclado, mouse e clique fora" \
-      "icones         liga/desliga icone dos apps" \
-      "sync           seguir o tema global do Hyprland" \
-      "testar         abrir o launcher pra ver" \
-      "config         ver a configuracao atual" \
-      "restaurar      volta os ajustes sem trocar paleta/layout" \
-      "sair" \
-      | FZF --prompt='rofi > ' --height=86% --header='central completa de personalizacao do launcher')
-    case "${c%% *}" in
+    local c; c=$({
+      row paleta     "$(t palette paleta)"         "$(t 'shared colors of the global theme' 'as cores compartilhadas do tema global')"
+      row layout     layout                        "$(t 'minimal (mono) or spotlight (rounded)' 'minimal (mono) ou spotlight (arredondado)')"
+      row janela     "$(t window janela)"          "$(t 'size, lines, position and transparency' 'tamanho, linhas, posição e transparência')"
+      row tipografia "$(t typography tipografia)"  "$(t 'font family and size' 'família e tamanho da fonte')"
+      row moldura    "$(t frame moldura)"          "$(t 'border thickness and corners' 'espessura da borda e cantos')"
+      row grade      "$(t grid grade)"             "$(t 'density, columns, spacing and scrolling' 'densidade, colunas, espaçamento e rolagem')"
+      row prompt     prompt                        "$(t 'search field and result text' 'campo de busca e texto dos resultados')"
+      row busca      "$(t search busca)"           "$(t 'algorithm, order, case and words' 'algoritmo, ordem, maiúsculas e palavras')"
+      row interacao  "$(t interaction interação)"  "$(t 'keyboard, mouse and click outside' 'teclado, mouse e clique fora')"
+      row icones     "$(t icons ícones)"           "$(t 'toggle the app icons' 'liga/desliga o ícone dos apps')"
+      row sync       sync                          "$(t 'follow the global Hyprland theme' 'seguir o tema global do Hyprland')"
+      row testar     "$(t test testar)"            "$(t 'open the launcher to see it' 'abrir o launcher para ver')"
+      row config     config                        "$(t 'show the current configuration' 'ver a configuração atual')"
+      row restaurar  "$(t reset restaurar)"        "$(t 'restore settings, keep palette/layout' 'volta os ajustes sem trocar paleta/layout')"
+      row sair       "$(t quit sair)"
+    } | menu '' "$(chips)" \
+          --preview "$SELFQ __status" --preview-window='right,45%,border-sharp,wrap' \
+          --preview-label=" $(t state estado) ")
+    case "$c" in
       paleta) pick_palette ;;
       layout) pick_layout ;;
       janela) window_menu ;;
@@ -926,14 +1100,18 @@ main_menu(){
 }
 
 usage(){
-  cat <<'EOF'
-rofitheme                       abre a central visual
+  if [ "$LANGX" = pt ]; then cat <<'EOF'
+rofitheme — personalização do launcher Rofi (Hyprism)
+
+rofitheme                       abre a central visual (Hyprism, ou o menu próprio)
+rofitheme menu                  abre o menu próprio
 rofitheme <paleta>              aplica uma paleta
 rofitheme paleta|layout|janela|fonte|moldura|grade
 rofitheme prompt|busca|comportamento|icones
 rofitheme testar|sync|status|reset
+rofitheme -l lista   -r aleatória   -g regera paletas   -h ajuda
 
-Configuracao direta (para scripts e para o visualconf):
+Configuração direta (para scripts e para o Hyprism):
   rofitheme set CHAVE VALOR [CHAVE VALOR ...]
   rofitheme get CHAVE
 
@@ -947,37 +1125,75 @@ Exemplos:
   rofitheme set border 2 radius 18 density confortavel
   rofitheme set columns 2 row_gap 4 scrollbar true
   rofitheme set matching fuzzy case_mode smart tokenize true
+
+Os subcomandos em inglês também funcionam (palette, window, font, frame,
+grid, search, behavior, icons, test, restore).
 EOF
+  else cat <<'EOF'
+rofitheme — Rofi launcher customization (Hyprism)
+
+rofitheme                       open the visual center (Hyprism, or the built-in menu)
+rofitheme menu                  open the built-in menu
+rofitheme <palette>             apply a palette
+rofitheme palette|layout|window|font|frame|grid
+rofitheme prompt|search|behavior|icons
+rofitheme test|sync|status|reset
+rofitheme -l list   -r random   -g regenerate palettes   -h help
+
+Direct configuration (for scripts and for Hyprism):
+  rofitheme set KEY VALUE [KEY VALUE ...]
+  rofitheme get KEY
+
+Keys: layout width lines pos opacity font_face font_size border radius
+      density columns row_gap icon_size prompt counter scrollbar icons
+      matching sort_enabled sorting case_mode tokenize cycle hover
+      click_exit drun_format
+
+Examples:
+  rofitheme set font_face "JetBrainsMono Nerd Font" font_size 13
+  rofitheme set border 2 radius 18 density comfortable
+  rofitheme set columns 2 row_gap 4 scrollbar true
+  rofitheme set matching fuzzy case_mode smart tokenize true
+
+Portuguese subcommands work too (paleta, janela, fonte, moldura, grade,
+busca, comportamento, icones, testar, restaurar).
+EOF
+  fi
 }
 
 cli_set(){
   [ "$#" -gt 0 ] && [ $(( $# % 2 )) -eq 0 ] || {
-    echo 'uso: rofitheme set CHAVE VALOR [CHAVE VALOR ...]' >&2; return 2; }
+    tn 'usage: rofitheme set KEY VALUE [KEY VALUE ...]' 'uso: rofitheme set CHAVE VALOR [CHAVE VALOR ...]' >&2; return 2; }
   while [ "$#" -gt 0 ]; do
     set_value "$1" "$2" || return
     shift 2
   done
-  rebuild && printf '  configuracao do Rofi atualizada\n'
+  rebuild && tn '  Rofi configuration updated' '  configuração do Rofi atualizada'
 }
 
 get_value(){
-  case "$1" in
-    palette|paleta) cat "$STATE" 2>/dev/null ;;
-    icons|icones) icons_state ;;
-    *) sget "$1" ;;
+  local key; key=$(norm_key "$1")
+  case "$key" in
+    palette) cat "$STATE" 2>/dev/null ;;
+    icons) icons_state ;;
+    *) sget "$key" ;;
   esac
 }
 
 # ---------- CLI ----------
+seed_files
 seed_state
 case "${1:-}" in
-  __prev)  preview_palette "$2" ;;
-  __lprev) preview_layout  "$2" ;;
+  __prev)   preview_palette "${2:-}" ;;
+  __lprev)  preview_layout  "${2:-}" ;;
+  __status) show_config preview ;;
   -l|--list)   palettes ;;
-  -g|--gerar)  gen_palettes ;;
-  -r|--random) t=$(palettes | shuf -n1); apply_palette "$t" ;;
+  -g|--gerar|--generate)  gen_palettes ;;
+  -r|--random) [ -z "$(palettes)" ] && gen_palettes >/dev/null
+               p=$(palettes | shuf -n1); apply_palette "$p" ;;
   -h|--help|help|ajuda) usage ;;
-  paleta|tema|cores) pick_palette ;;
+  menu) main_menu ;;
+  paleta|tema|cores|palette|theme|colors) pick_palette ;;
   layout)
     if [ -n "${2:-}" ]; then
       if set_value layout "$2"; then
@@ -985,37 +1201,38 @@ case "${1:-}" in
         rebuild && echo "  layout: $2"
       fi
     else pick_layout; fi ;;
-  janela|aparencia) window_menu ;;
-  largura)     if [ -n "${2:-}" ]; then apply_setting width "$2" largura; else pick_width; fi ;;
-  linhas)      if [ -n "${2:-}" ]; then apply_setting lines "$2" linhas; else pick_lines; fi ;;
-  opacidade|transp*) if [ -n "${2:-}" ]; then apply_setting opacity "$2" opacidade; else pick_opacidade; fi ;;
-  posicao)     if [ -n "${2:-}" ]; then apply_setting pos "$2" posicao; else pick_posicao; fi ;;
-  fonte|tipografia)
+  janela|aparencia|window|appearance) window_menu ;;
+  largura|width) if [ -n "${2:-}" ]; then apply_setting width "$2" "$(t width largura)"; else pick_width; fi ;;
+  linhas|lines)  if [ -n "${2:-}" ]; then apply_setting lines "$2" "$(t lines linhas)"; else pick_lines; fi ;;
+  opacidade|opacity|transp*) if [ -n "${2:-}" ]; then apply_setting opacity "$2" "$(t opacity opacidade)"; else pick_opacidade; fi ;;
+  posicao|position) if [ -n "${2:-}" ]; then apply_setting pos "$2" "$(t position posição)"; else pick_posicao; fi ;;
+  fonte|tipografia|font|typography)
     if [ -n "${2:-}" ]; then
       set_value font_face "$2" && { [ -z "${3:-}" ] || set_value font_size "$3"; } \
-        && rebuild && echo "  fonte: $2 ${3:-}"
+        && rebuild && echo "  $(t font fonte): $2 ${3:-}"
     else font_menu; fi ;;
-  moldura)
+  moldura|frame)
     if [ -n "${2:-}" ]; then
       set_value border "$2" && { [ -z "${3:-}" ] || set_value radius "$3"; } \
-        && rebuild && echo "  moldura: borda $2 | cantos ${3:-$(sget radius)}"
+        && rebuild && tf '  frame: border %s | corners %s\n' '  moldura: borda %s | cantos %s\n' "$2" "${3:-$(sget radius)}"
     else frame_menu; fi ;;
-  grade)       grid_menu ;;
-  densidade)  if [ -n "${2:-}" ]; then apply_setting density "$2" densidade; else pick_density; fi ;;
-  colunas)     if [ -n "${2:-}" ]; then apply_setting columns "$2" colunas; else pick_columns; fi ;;
-  espacamento|gap) if [ -n "${2:-}" ]; then apply_setting row_gap "$2" espacamento; else pick_row_gap; fi ;;
+  grade|grid)  grid_menu ;;
+  densidade|density) if [ -n "${2:-}" ]; then apply_setting density "$2" "$(t density densidade)"; else pick_density; fi ;;
+  colunas|columns)   if [ -n "${2:-}" ]; then apply_setting columns "$2" "$(t columns colunas)"; else pick_columns; fi ;;
+  espacamento|spacing|gap) if [ -n "${2:-}" ]; then apply_setting row_gap "$2" "$(t spacing espaçamento)"; else pick_row_gap; fi ;;
   prompt)      if [ -n "${2:-}" ]; then apply_setting prompt "$2" prompt; else prompt_menu; fi ;;
-  busca)       if [ -n "${2:-}" ]; then apply_setting matching "$2" busca; else search_menu; fi ;;
-  comportamento|interacao) interaction_menu ;;
-  icones)      if [ -n "${2:-}" ]; then set_value icons "$2" && echo "  icones: $2"; else toggle_icones; fi ;;
+  busca|search) if [ -n "${2:-}" ]; then apply_setting matching "$2" "$(t search busca)"; else search_menu; fi ;;
+  comportamento|interacao|behavior|behaviour|interaction) interaction_menu ;;
+  icones|icons) if [ -n "${2:-}" ]; then set_value icons "$2" && tf '  icons: %s\n' '  ícones: %s\n' "$2"; else toggle_icones; fi ;;
   set)         shift; cli_set "$@" ;;
-  get)         if [ -n "${2:-}" ]; then get_value "$2"; else echo 'uso: rofitheme get CHAVE' >&2; exit 2; fi ;;
+  get)         if [ -n "${2:-}" ]; then get_value "$2"; else tn 'usage: rofitheme get KEY' 'uso: rofitheme get CHAVE' >&2; exit 2; fi ;;
   status)      show_config plain ;;
-  reset|restaurar) reset_settings ;;
+  reset|restaurar|restore) reset_settings ;;
   sync)        sync_hypr ;;
-  testar|demo|preview) demo ;;
+  testar|test|demo|preview) demo ;;
   config)      show_config ;;
   "")          if have visualconf; then exec visualconf rofi; else main_menu; fi ;;
-  *)  if [ -f "$PAL/$1.rasi" ]; then apply_palette "$1"
-      else echo "opcao ou paleta '$1' invalida"; main_menu; fi ;;
+  *)  [ -z "$(palettes)" ] && gen_palettes >/dev/null   # instalacao nova: paletas ainda nao geradas
+      if [ -f "$PAL/$1.rasi" ]; then apply_palette "$1"
+      else tf "invalid option or palette '%s'\n" "opção ou paleta '%s' inválida\n" "$1"; main_menu; fi ;;
 esac

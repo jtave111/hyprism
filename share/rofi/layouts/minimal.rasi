@@ -1,0 +1,160 @@
+/*
+ * layout: minimal - mono, cantos retos, prompt de shell e contador N/total.
+ * As cores NAO ficam aqui: vem dos arquivos em themes/palettes.
+ * Editado por rofitheme; pode mexer a vontade.
+ *
+ * CUIDADO: nunca escreva a sequencia barra-asterisco dentro de um
+ * comentario. O rofi trata isso como comentario aninhado e engole o
+ * resto do arquivo em silencio.
+ */
+
+/* Sem bloco '*' aqui: um segundo bloco '*' SUBSTITUI o da paleta e apaga
+   todas as variaveis de cor. O rofitheme emite um '*' unico, ja fundido. */
+
+/* Os valores @win-* sao definidos pelo rofitheme (largura, posicao,
+   opacidade, linhas). NAO acrescente um segundo bloco 'window' aqui:
+   no rofi, um bloco repetido SUBSTITUI o anterior em vez de somar,
+   e a janela perderia o 'children', caindo no tema padrao. */
+window {
+    transparency:       "real";
+    location:           @win-loc;
+    anchor:             @win-anchor;
+    x-offset:           @win-xoff;
+    y-offset:           @win-yoff;
+
+    width:              @win-width;
+    border-radius:      @win-radius;
+    border:             @win-border;
+    border-color:       @line;
+    background-color:   @win-bg;
+
+    padding:            0;
+    children:           [ mainbox ];
+}
+
+mainbox {
+    padding:            0;
+    spacing:            0;
+    children:           [ inputbar, listview ];
+}
+
+/* ---- linha de comando ---- */
+
+inputbar {
+    padding:            @input-padding;
+    spacing:            @input-spacing;
+    border:             0 0 1px 0;
+    border-color:       @line;
+    children:           [ prompt, textbox-prompt-colon, entry,
+                          num-filtered-rows, textbox-num-sep, num-rows ];
+}
+
+prompt {
+    enabled:            @prompt-enabled;
+    expand:             false;
+    font:               @list-font;
+    text-color:         @dim;
+    vertical-align:     0.5;
+}
+
+textbox-prompt-colon {
+    expand:             false;
+    str:                @prompt-symbol;
+    font:               @input-font;
+    text-color:         @accent-lit;
+    vertical-align:     0.5;
+}
+
+entry {
+    placeholder:        @prompt-placeholder;
+    placeholder-color:  @dim;
+    font:               @input-font;
+    text-color:         @fg;
+    vertical-align:     0.5;
+    cursor:             text;
+}
+
+num-filtered-rows {
+    enabled:            @counter-enabled;
+    expand:             false;
+    font:               @small-font;
+    text-color:         @dim;
+    vertical-align:     0.5;
+}
+
+textbox-num-sep {
+    enabled:            @counter-enabled;
+    expand:             false;
+    str:                "/";
+    font:               @small-font;
+    text-color:         @line;
+    vertical-align:     0.5;
+}
+
+num-rows {
+    enabled:            @counter-enabled;
+    expand:             false;
+    font:               @small-font;
+    text-color:         @dim;
+    vertical-align:     0.5;
+}
+
+/* ---- resultados ---- */
+
+listview {
+    lines:              @win-lines;
+    columns:            @win-columns;
+    dynamic:            true;
+    fixed-height:       false;
+    scrollbar:          @list-scrollbar;
+    cycle:              @list-cycle;
+
+    padding:            @list-padding;
+    spacing:            @list-spacing;
+}
+
+element {
+    padding:            @element-padding;
+    spacing:            @element-spacing;
+    border:             @element-border;
+    border-color:       transparent;
+    border-radius:      @element-radius;
+    cursor:             pointer;
+}
+
+element normal.normal,
+element alternate.normal {
+    background-color:   transparent;
+    text-color:         @fg;
+}
+
+element selected.normal,
+element selected.active,
+element selected.urgent {
+    background-color:   @sel-bg;
+    text-color:         @sel-fg;
+    border-color:       @accent;
+}
+
+element-icon {
+    size:               @icon-size;
+    vertical-align:     0.5;
+    background-color:   transparent;
+}
+
+/* O bloco element-text NAO fica aqui: o rofitheme o escreve como ultima
+   linha do current.rasi, junto com o 'highlight'. */
+
+/* ---- mensagens ---- */
+
+message {
+    padding:            8px 12px;
+    border:             1px 0 0 0;
+    border-color:       @line;
+}
+
+textbox {
+    font:               @list-font;
+    text-color:         @dim;
+    vertical-align:     0.5;
+}

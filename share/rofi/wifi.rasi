@@ -1,0 +1,151 @@
+/*
+ * wifi.rasi - theme for the Hyprism Wi-Fi menu (wifi-menu).
+ *
+ * It inherits the ACTIVE launcher palette (themes/current.rasi, built by
+ * rofitheme), so it follows the rest of the system automatically: switching
+ * the palette with hyprism or rofitheme restyles this menu too.
+ *
+ * Differences from the launcher: a wider window (SSID + signal + lock do not
+ * fit in 560px), more visible rows, and a styled password field.
+ * wifi-menu sets the entry placeholder at runtime in the current language.
+ *
+ * CAUTION: never write slash-asterisk inside a comment. rofi reads it as a
+ * nested comment and silently drops the rest of the file.
+ */
+
+@theme "~/.config/rofi/themes/current.rasi"
+
+* {
+    background-color: transparent;
+    text-color:       @fg;
+}
+
+window {
+    transparency: "real";
+    location:     center;
+    anchor:       center;
+    y-offset:     -40px;
+
+    width:            700px;
+    border:           1px;
+    border-color:     @accent;
+    border-radius:    0px;
+    background-color: @bg;
+
+    padding:  0;
+    children: [ mainbox ];
+}
+
+mainbox {
+    padding:  0;
+    spacing:  0;
+    children: [ inputbar, message, listview ];
+}
+
+/* ---- search line ---- */
+
+inputbar {
+    padding:      11px 14px;
+    spacing:      9px;
+    border:       0 0 1px 0;
+    border-color: @line;
+    children:     [ prompt, textbox-prompt-colon, entry,
+                    num-filtered-rows, textbox-num-sep, num-rows ];
+}
+
+prompt {
+    enabled:        true;
+    expand:         false;
+    text-color:     @accent;
+    vertical-align: 0.5;
+}
+
+textbox-prompt-colon {
+    expand:         false;
+    str:            "❯";
+    text-color:     @accent;
+    vertical-align: 0.5;
+}
+
+entry {
+    placeholder:       "filter networks";
+    placeholder-color: @dim;
+    text-color:        @fg;
+    vertical-align:    0.5;
+    cursor:            text;
+}
+
+num-filtered-rows, num-rows {
+    expand:         false;
+    text-color:     @dim;
+    vertical-align: 0.5;
+}
+
+textbox-num-sep {
+    expand:         false;
+    str:            "/";
+    text-color:     @line;
+    vertical-align: 0.5;
+}
+
+/* ---- message (connecting, wrong password) ---- */
+
+message {
+    padding:      9px 14px;
+    border:       0 0 1px 0;
+    border-color: @line;
+}
+
+textbox {
+    text-color:     @accent-lit;
+    vertical-align: 0.5;
+}
+
+/* ---- network list ---- */
+
+listview {
+    lines:        12;
+    columns:      1;
+    dynamic:      true;
+    fixed-height: false;
+    scrollbar:    true;
+    cycle:        true;
+
+    padding: 5px 0;
+    spacing: 0;
+}
+
+scrollbar {
+    handle-width: 3px;
+    handle-color: @accent;
+    background-color: @line;
+}
+
+element {
+    padding:       6px 14px;
+    spacing:       10px;
+    border:        0 0 0 2px;
+    border-color:  transparent;
+    border-radius: 0px;
+    cursor:        pointer;
+}
+
+element normal.normal,
+element alternate.normal {
+    background-color: transparent;
+    text-color:       @fg;
+}
+
+element selected.normal,
+element selected.active,
+element selected.urgent {
+    background-color: @sel-bg;
+    text-color:       @sel-fg;
+    border-color:     @accent;
+}
+
+element-text {
+    vertical-align:   0.5;
+    background-color: transparent;
+    text-color:       inherit;
+}

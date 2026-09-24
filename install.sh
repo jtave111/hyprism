@@ -271,6 +271,7 @@ want terminal && seed_dir "$REPO/share/kitty/themes"  "$CFG/kitty/themes"
 want terminal && seed_dir "$REPO/share/kitty/prompts" "$CFG/kitty/prompts"
 want launcher && seed_dir "$REPO/share/rofi/layouts"  "$CFG/rofi/themes/layouts"
 want launcher && [ -f "$REPO/share/rofi/wifi.rasi" ] && [ ! -e "$CFG/rofi/wifi.rasi" ] && run cp "$REPO/share/rofi/wifi.rasi" "$CFG/rofi/wifi.rasi"
+want launcher && [ -f "$REPO/share/rofi/config.rasi" ] && [ ! -e "$CFG/rofi/config.rasi" ] && run cp "$REPO/share/rofi/config.rasi" "$CFG/rofi/config.rasi"
 
 # a wallpaper folder and a default wallpaper, so the first login is not black
 WALLDIR="$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")/wallpaper"

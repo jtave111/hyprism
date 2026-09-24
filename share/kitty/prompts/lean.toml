@@ -1,0 +1,12 @@
+"$schema" = 'https://starship.rs/config-schema.json'
+add_newline = false
+command_timeout = 1000
+format = "$directory$character"
+[directory]
+style = "dim white"
+truncation_length = 1
+truncation_symbol = ""
+format = "[$path ]($style)"
+[character]
+success_symbol = "[❯](bold #00ff41)"
+error_symbol = "[❯](bold red)"

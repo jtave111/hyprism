@@ -1,0 +1,141 @@
+/*
+ * layout: spotlight - arredondado, com icones, cara de macOS.
+ * As cores NAO ficam aqui: vem dos arquivos em themes/palettes.
+ * Nunca escreva barra-asterisco dentro de um comentario: o rofi
+ * entende como comentario aninhado e descarta o resto do arquivo.
+ */
+
+/* Sem bloco '*' aqui: ver a nota em minimal.rasi. */
+
+/* Os valores @win-* vem do rofitheme; ver a nota em minimal.rasi. */
+window {
+    transparency:       "real";
+    location:           @win-loc;
+    anchor:             @win-anchor;
+    x-offset:           @win-xoff;
+    y-offset:           @win-yoff;
+
+    width:              @win-width;
+    border-radius:      @win-radius;
+    border:             @win-border;
+    border-color:       @line;
+    background-color:   @win-bg;
+
+    padding:            0;
+    children:           [ mainbox ];
+}
+
+mainbox {
+    padding:            0;
+    spacing:            0;
+    children:           [ inputbar, listview ];
+}
+
+/* ---- campo de busca ---- */
+
+inputbar {
+    padding:            @input-padding;
+    spacing:            @input-spacing;
+    border:             0 0 1px 0;
+    border-color:       @line;
+    children:           [ prompt, textbox-prompt-colon, entry,
+                          num-filtered-rows, textbox-num-sep, num-rows ];
+}
+
+prompt {
+    enabled:            @prompt-enabled;
+    expand:             false;
+    font:               @list-font;
+    text-color:         @dim;
+    vertical-align:     0.5;
+}
+
+textbox-prompt-colon {
+    expand:             false;
+    str:                @prompt-symbol;
+    font:               @input-font;
+    text-color:         @accent-lit;
+    vertical-align:     0.5;
+}
+
+entry {
+    placeholder:        @prompt-placeholder;
+    placeholder-color:  @dim;
+    font:               @input-font;
+    text-color:         @fg;
+    vertical-align:     0.5;
+    cursor:             text;
+}
+
+num-filtered-rows,
+textbox-num-sep,
+num-rows {
+    enabled:            @counter-enabled;
+    expand:             false;
+    font:               @small-font;
+    text-color:         @dim;
+    vertical-align:     0.5;
+}
+
+textbox-num-sep {
+    str:                "/";
+    text-color:         @line;
+}
+
+/* ---- resultados ---- */
+
+listview {
+    lines:              @win-lines;
+    columns:            @win-columns;
+    dynamic:            true;
+    fixed-height:       false;
+    scrollbar:          @list-scrollbar;
+    cycle:              @list-cycle;
+
+    padding:            @list-padding;
+    spacing:            @list-spacing;
+}
+
+element {
+    padding:            @element-padding;
+    spacing:            @element-spacing;
+    border:             @element-border;
+    border-radius:      @element-radius;
+    cursor:             pointer;
+}
+
+element normal.normal,
+element alternate.normal {
+    background-color:   transparent;
+    text-color:         @fg;
+}
+
+element selected.normal,
+element selected.active,
+element selected.urgent {
+    background-color:   @accent;
+    text-color:         @on-accent;
+}
+
+element-icon {
+    size:               @icon-size;
+    vertical-align:     0.5;
+    background-color:   transparent;
+}
+
+/* O bloco element-text NAO fica aqui: o rofitheme o escreve como ultima
+   linha do current.rasi, junto com o 'highlight' (ver minimal.rasi). */
+
+/* ---- mensagens ---- */
+
+message {
+    padding:            10px 20px;
+    border:             1px 0 0 0;
+    border-color:       @line;
+}
+
+textbox {
+    font:               @list-font;
+    text-color:         @dim;
+    vertical-align:     0.5;
+}

@@ -1,0 +1,30 @@
+/* rofi configuration seeded by Hyprism (rofitheme).
+   rofitheme keeps the values below in sync with its own settings and appends
+   the @theme line for the generated theme. Edit freely otherwise. */
+configuration {
+    modes:                  "drun,run,window";
+    font:                   "FiraCode Nerd Font Mono 11";
+    show-icons:             false;
+
+    display-drun:           "apps";
+    display-run:            "run";
+    display-window:         "win";
+
+    drun-display-format:    "{name}";
+    drun-match-fields:      "name,generic,exec,categories,keywords";
+
+    matching:               "fuzzy";
+    sort:                   true;
+    sorting-method:         "fzf";
+    case-sensitive:         false;
+    case-smart:             false;
+    tokenize:               true;
+    cycle:                  true;
+
+    terminal:               "kitty";
+
+    click-to-exit:          true;
+    hover-select:           true;
+    me-select-entry:        "";
+    me-accept-entry:        "MousePrimary";
+}
