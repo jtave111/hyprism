@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 380" width="1280" height="380" role="img" aria-label="Hyprism — one palette, the whole desktop">
+  <defs>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="1" fill="#ffffff" opacity=".035"/>
+    </pattern>
+    <radialGradient id="glow" cx="68%" cy="52%" r="62%">
+      <stop offset="0" stop-color="#1b1e2a"/>
+      <stop offset="1" stop-color="#0b0b0d"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0" x2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity=".95"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" x2="1">
+      <stop offset=".6" stop-color="#0b0b0d" stop-opacity="0"/>
+      <stop offset="1" stop-color="#0b0b0d" stop-opacity=".85"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="380" rx="14" fill="url(#glow)"/>
+
+  <!-- wordmark, terminal style -->
+  <g font-family="'JetBrains Mono','Fira Code','DejaVu Sans Mono',Menlo,Consolas,monospace">
+    <text x="62" y="170" font-size="88" font-weight="800" letter-spacing="10" fill="#f2f2f2">HYPRISM</text>
+    <text x="66" y="214" font-size="22" fill="#c8c8c8">one palette <tspan fill="#ff3b3b">→</tspan> the whole desktop</text>
+    <text x="66" y="254" font-size="14.5" fill="#8a8a8a" letter-spacing="1">hyprland · arch linux · retro tui · system settings · en/pt</text>
+    <text x="66" y="296" font-size="15" fill="#5c5c5c">hyprism:/ $ <tspan fill="#c8c8c8">./install.sh</tspan><tspan fill="#ff3b3b">█</tspan></text>
+  </g>
+
+  <!-- incoming white light -->
+  <polygon points="640,214 842,194 842,201 640,222" fill="url(#beam)"/>
+
+  <!-- spectrum: each band is a palette accent (terminal-red, gruvbox, one-dark,
+       matrix, cyberpunk, nord, tokyo-night, dracula) -->
+  <g opacity=".93">
+    <polygon points="902,184 1280,52  1280,86"  fill="#e24b4b"/>
+    <polygon points="902,187 1280,86  1280,120" fill="#fe8019"/>
+    <polygon points="902,190 1280,120 1280,154" fill="#e5c07b"/>
+    <polygon points="902,193 1280,154 1280,188" fill="#2bd96b"/>
+    <polygon points="902,196 1280,188 1280,222" fill="#00e5ff"/>
+    <polygon points="902,199 1280,222 1280,256" fill="#81a1c1"/>
+    <polygon points="902,202 1280,256 1280,290" fill="#7aa2f7"/>
+    <polygon points="902,205 1280,290 1280,324" fill="#bd93f9"/>
+  </g>
+  <rect x="902" y="0" width="378" height="380" fill="url(#edge)"/>
+
+  <!-- the prism -->
+  <polygon points="872,124 934,242 810,242" fill="#0f1016" stroke="#e8e8e8" stroke-width="2.5" stroke-linejoin="round"/>
+  <polygon points="872,146 916,232 828,232" fill="none" stroke="#ffffff" stroke-opacity=".12"/>
+
+  <rect width="1280" height="380" rx="14" fill="url(#scan)"/>
+  <rect x=".75" y=".75" width="1278.5" height="378.5" rx="14" fill="none" stroke="#2a2a2e" stroke-width="1.5"/>
+</svg>

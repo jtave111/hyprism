@@ -17,7 +17,6 @@ HYPR="${HYPRCONF_BIN:-$(command -v hyprism || command -v hyprtheme || echo hypri
 ROFI="${ROFICONF_BIN:-$(command -v rofitheme || echo rofitheme)}"
 KITTY="${KITTYCONF_BIN:-$(command -v kittytheme || echo kittytheme)}"
 SETTINGS="$(command -v hyprism-settings || echo hyprism-settings)"
-AUDIT="${SYSTEM_AUDIT_BIN:-$(command -v system-audit || echo system-audit)}"
 
 HYPR_STATE="$HOME/.config/hypr/themes/.state"
 HYPR_ACTIVE="$HOME/.config/hypr/themes/.active"

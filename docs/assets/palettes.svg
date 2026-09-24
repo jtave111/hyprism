@@ -1,0 +1,290 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 968 1160" width="968" height="1160" role="img" aria-label="Hyprism palettes">
+<style>text{font-family:"JetBrains Mono","Fira Code","DejaVu Sans Mono",Menlo,Consolas,monospace}</style>
+<rect width="100%" height="100%" rx="12" fill="#0c0c0e"/>
+<rect x="20" y="20" width="300" height="112" rx="8" fill="#000c18" stroke="#101f34"/>
+<rect x="30" y="30" width="280" height="54" rx="5" fill="#061322" stroke="#596f99" stroke-width="2"/>
+<text x="42" y="52" font-size="14" font-weight="700" fill="#6688cc">abyss</text>
+<text x="42" y="72" font-size="11.5" fill="#2d4369">one palette → the whole desktop</text>
+<rect x="30" y="96" width="34" height="24" rx="4" fill="#000c18" stroke="#101f34"/>
+<rect x="70" y="96" width="34" height="24" rx="4" fill="#061322" stroke="#101f34"/>
+<rect x="110" y="96" width="34" height="24" rx="4" fill="#082050" stroke="#101f34"/>
+<rect x="150" y="96" width="34" height="24" rx="4" fill="#2d4369" stroke="#101f34"/>
+<rect x="190" y="96" width="34" height="24" rx="4" fill="#6688cc" stroke="#101f34"/>
+<rect x="230" y="96" width="34" height="24" rx="4" fill="#596f99" stroke="#101f34"/>
+<rect x="270" y="96" width="34" height="24" rx="4" fill="#8a9ab7" stroke="#101f34"/>
+<rect x="334" y="20" width="300" height="112" rx="8" fill="#0a0e14" stroke="#25282c"/>
+<rect x="344" y="30" width="280" height="54" rx="5" fill="#14171d" stroke="#53bdfa" stroke-width="2"/>
+<text x="356" y="52" font-size="14" font-weight="700" fill="#b3b1ad">ayu-dark</text>
+<text x="356" y="72" font-size="11.5" fill="#565758">one palette → the whole desktop</text>
+<rect x="344" y="96" width="34" height="24" rx="4" fill="#0a0e14" stroke="#25282c"/>
+<rect x="384" y="96" width="34" height="24" rx="4" fill="#14171d" stroke="#25282c"/>
+<rect x="424" y="96" width="34" height="24" rx="4" fill="#273747" stroke="#25282c"/>
+<rect x="464" y="96" width="34" height="24" rx="4" fill="#565758" stroke="#25282c"/>
+<rect x="504" y="96" width="34" height="24" rx="4" fill="#b3b1ad" stroke="#25282c"/>
+<rect x="544" y="96" width="34" height="24" rx="4" fill="#53bdfa" stroke="#25282c"/>
+<rect x="584" y="96" width="34" height="24" rx="4" fill="#86d0fb" stroke="#25282c"/>
+<rect x="648" y="20" width="300" height="112" rx="8" fill="#000000" stroke="#202020"/>
+<rect x="658" y="30" width="280" height="54" rx="5" fill="#0c0c0c" stroke="#5f5faf" stroke-width="2"/>
+<text x="670" y="52" font-size="14" font-weight="700" fill="#c9c9c9">blackarch</text>
+<text x="670" y="72" font-size="11.5" fill="#5a5a5a">one palette → the whole desktop</text>
+<rect x="658" y="96" width="34" height="24" rx="4" fill="#000000" stroke="#202020"/>
+<rect x="698" y="96" width="34" height="24" rx="4" fill="#0c0c0c" stroke="#202020"/>
+<rect x="738" y="96" width="34" height="24" rx="4" fill="#3a0000" stroke="#202020"/>
+<rect x="778" y="96" width="34" height="24" rx="4" fill="#5a5a5a" stroke="#202020"/>
+<rect x="818" y="96" width="34" height="24" rx="4" fill="#c9c9c9" stroke="#202020"/>
+<rect x="858" y="96" width="34" height="24" rx="4" fill="#5f5faf" stroke="#202020"/>
+<rect x="898" y="96" width="34" height="24" rx="4" fill="#8f8fc7" stroke="#202020"/>
+<rect x="20" y="146" width="300" height="112" rx="8" fill="#303446" stroke="#484c62"/>
+<rect x="30" y="156" width="280" height="54" rx="5" fill="#393d50" stroke="#8caaee" stroke-width="2"/>
+<text x="42" y="178" font-size="14" font-weight="700" fill="#c6d0f5">catppuccin-frappe</text>
+<text x="42" y="198" font-size="11.5" fill="#737a94">one palette → the whole desktop</text>
+<rect x="30" y="222" width="34" height="24" rx="4" fill="#303446" stroke="#484c62"/>
+<rect x="70" y="222" width="34" height="24" rx="4" fill="#393d50" stroke="#484c62"/>
+<rect x="110" y="222" width="34" height="24" rx="4" fill="#626880" stroke="#484c62"/>
+<rect x="150" y="222" width="34" height="24" rx="4" fill="#737a94" stroke="#484c62"/>
+<rect x="190" y="222" width="34" height="24" rx="4" fill="#c6d0f5" stroke="#484c62"/>
+<rect x="230" y="222" width="34" height="24" rx="4" fill="#8caaee" stroke="#484c62"/>
+<rect x="270" y="222" width="34" height="24" rx="4" fill="#aec3f3" stroke="#484c62"/>
+<rect x="334" y="146" width="300" height="112" rx="8" fill="#eff1f5" stroke="#d4d7de"/>
+<rect x="344" y="156" width="280" height="54" rx="5" fill="#e5e7ec" stroke="#1e66f5" stroke-width="2"/>
+<text x="356" y="178" font-size="14" font-weight="700" fill="#4c4f69">catppuccin-latte</text>
+<text x="356" y="198" font-size="11.5" fill="#a5a8b6">one palette → the whole desktop</text>
+<rect x="344" y="222" width="34" height="24" rx="4" fill="#eff1f5" stroke="#d4d7de"/>
+<rect x="384" y="222" width="34" height="24" rx="4" fill="#e5e7ec" stroke="#d4d7de"/>
+<rect x="424" y="222" width="34" height="24" rx="4" fill="#ccd0da" stroke="#d4d7de"/>
+<rect x="464" y="222" width="34" height="24" rx="4" fill="#a5a8b6" stroke="#d4d7de"/>
+<rect x="504" y="222" width="34" height="24" rx="4" fill="#4c4f69" stroke="#d4d7de"/>
+<rect x="544" y="222" width="34" height="24" rx="4" fill="#1e66f5" stroke="#d4d7de"/>
+<rect x="584" y="222" width="34" height="24" rx="4" fill="#1549b0" stroke="#d4d7de"/>
+<rect x="648" y="146" width="300" height="112" rx="8" fill="#24273a" stroke="#3e4257"/>
+<rect x="658" y="156" width="280" height="54" rx="5" fill="#2d3145" stroke="#8aadf4" stroke-width="2"/>
+<text x="670" y="178" font-size="14" font-weight="700" fill="#cad3f5">catppuccin-macchiato</text>
+<text x="670" y="198" font-size="11.5" fill="#6e748e">one palette → the whole desktop</text>
+<rect x="658" y="222" width="34" height="24" rx="4" fill="#24273a" stroke="#3e4257"/>
+<rect x="698" y="222" width="34" height="24" rx="4" fill="#2d3145" stroke="#3e4257"/>
+<rect x="738" y="222" width="34" height="24" rx="4" fill="#5b6078" stroke="#3e4257"/>
+<rect x="778" y="222" width="34" height="24" rx="4" fill="#6e748e" stroke="#3e4257"/>
+<rect x="818" y="222" width="34" height="24" rx="4" fill="#cad3f5" stroke="#3e4257"/>
+<rect x="858" y="222" width="34" height="24" rx="4" fill="#8aadf4" stroke="#3e4257"/>
+<rect x="898" y="222" width="34" height="24" rx="4" fill="#adc5f7" stroke="#3e4257"/>
+<rect x="20" y="272" width="300" height="112" rx="8" fill="#1e1e2e" stroke="#3a3b4d"/>
+<rect x="30" y="282" width="280" height="54" rx="5" fill="#282939" stroke="#89b4fa" stroke-width="2"/>
+<text x="42" y="304" font-size="14" font-weight="700" fill="#cdd6f4">catppuccin-mocha</text>
+<text x="42" y="324" font-size="11.5" fill="#6c7087">one palette → the whole desktop</text>
+<rect x="30" y="348" width="34" height="24" rx="4" fill="#1e1e2e" stroke="#3a3b4d"/>
+<rect x="70" y="348" width="34" height="24" rx="4" fill="#282939" stroke="#3a3b4d"/>
+<rect x="110" y="348" width="34" height="24" rx="4" fill="#585b70" stroke="#3a3b4d"/>
+<rect x="150" y="348" width="34" height="24" rx="4" fill="#6c7087" stroke="#3a3b4d"/>
+<rect x="190" y="348" width="34" height="24" rx="4" fill="#cdd6f4" stroke="#3a3b4d"/>
+<rect x="230" y="348" width="34" height="24" rx="4" fill="#89b4fa" stroke="#3a3b4d"/>
+<rect x="270" y="348" width="34" height="24" rx="4" fill="#accafb" stroke="#3a3b4d"/>
+<rect x="334" y="272" width="300" height="112" rx="8" fill="#0a0a12" stroke="#083136"/>
+<rect x="344" y="282" width="280" height="54" rx="5" fill="#09181f" stroke="#00b8ff" stroke-width="2"/>
+<text x="356" y="304" font-size="14" font-weight="700" fill="#00fff9">cyberpunk</text>
+<text x="356" y="324" font-size="11.5" fill="#057879">one palette → the whole desktop</text>
+<rect x="344" y="348" width="34" height="24" rx="4" fill="#0a0a12" stroke="#083136"/>
+<rect x="384" y="348" width="34" height="24" rx="4" fill="#09181f" stroke="#083136"/>
+<rect x="424" y="348" width="34" height="24" rx="4" fill="#3a1a4a" stroke="#083136"/>
+<rect x="464" y="348" width="34" height="24" rx="4" fill="#057879" stroke="#083136"/>
+<rect x="504" y="348" width="34" height="24" rx="4" fill="#00fff9" stroke="#083136"/>
+<rect x="544" y="348" width="34" height="24" rx="4" fill="#00b8ff" stroke="#083136"/>
+<rect x="584" y="348" width="34" height="24" rx="4" fill="#4ccdff" stroke="#083136"/>
+<rect x="648" y="272" width="300" height="112" rx="8" fill="#282a36" stroke="#494a54"/>
+<rect x="658" y="282" width="280" height="54" rx="5" fill="#343641" stroke="#bd93f9" stroke-width="2"/>
+<text x="670" y="304" font-size="14" font-weight="700" fill="#f8f8f2">dracula</text>
+<text x="670" y="324" font-size="11.5" fill="#85868a">one palette → the whole desktop</text>
+<rect x="658" y="348" width="34" height="24" rx="4" fill="#282a36" stroke="#494a54"/>
+<rect x="698" y="348" width="34" height="24" rx="4" fill="#343641" stroke="#494a54"/>
+<rect x="738" y="348" width="34" height="24" rx="4" fill="#44475a" stroke="#494a54"/>
+<rect x="778" y="348" width="34" height="24" rx="4" fill="#85868a" stroke="#494a54"/>
+<rect x="818" y="348" width="34" height="24" rx="4" fill="#f8f8f2" stroke="#494a54"/>
+<rect x="858" y="348" width="34" height="24" rx="4" fill="#bd93f9" stroke="#494a54"/>
+<rect x="898" y="348" width="34" height="24" rx="4" fill="#d0b3fa" stroke="#494a54"/>
+<rect x="20" y="398" width="300" height="112" rx="8" fill="#2d353b" stroke="#474c4c"/>
+<rect x="30" y="408" width="280" height="54" rx="5" fill="#363d41" stroke="#7fbbb3" stroke-width="2"/>
+<text x="42" y="430" font-size="14" font-weight="700" fill="#d3c6aa">everforest</text>
+<text x="42" y="450" font-size="11.5" fill="#77766c">one palette → the whole desktop</text>
+<rect x="30" y="474" width="34" height="24" rx="4" fill="#2d353b" stroke="#474c4c"/>
+<rect x="70" y="474" width="34" height="24" rx="4" fill="#363d41" stroke="#474c4c"/>
+<rect x="110" y="474" width="34" height="24" rx="4" fill="#4f585e" stroke="#474c4c"/>
+<rect x="150" y="474" width="34" height="24" rx="4" fill="#77766c" stroke="#474c4c"/>
+<rect x="190" y="474" width="34" height="24" rx="4" fill="#d3c6aa" stroke="#474c4c"/>
+<rect x="230" y="474" width="34" height="24" rx="4" fill="#7fbbb3" stroke="#474c4c"/>
+<rect x="270" y="474" width="34" height="24" rx="4" fill="#a5cfc9" stroke="#474c4c"/>
+<rect x="334" y="398" width="300" height="112" rx="8" fill="#282828" stroke="#47443e"/>
+<rect x="344" y="408" width="280" height="54" rx="5" fill="#333230" stroke="#458588" stroke-width="2"/>
+<text x="356" y="430" font-size="14" font-weight="700" fill="#ebdbb2">gruvbox-dark</text>
+<text x="356" y="450" font-size="11.5" fill="#7f7866">one palette → the whole desktop</text>
+<rect x="344" y="474" width="34" height="24" rx="4" fill="#282828" stroke="#47443e"/>
+<rect x="384" y="474" width="34" height="24" rx="4" fill="#333230" stroke="#47443e"/>
+<rect x="424" y="474" width="34" height="24" rx="4" fill="#504945" stroke="#47443e"/>
+<rect x="464" y="474" width="34" height="24" rx="4" fill="#7f7866" stroke="#47443e"/>
+<rect x="504" y="474" width="34" height="24" rx="4" fill="#ebdbb2" stroke="#47443e"/>
+<rect x="544" y="474" width="34" height="24" rx="4" fill="#458588" stroke="#47443e"/>
+<rect x="584" y="474" width="34" height="24" rx="4" fill="#7ca9ab" stroke="#47443e"/>
+<rect x="648" y="398" width="300" height="112" rx="8" fill="#fbf1c7" stroke="#dcd3af"/>
+<rect x="658" y="408" width="280" height="54" rx="5" fill="#efe5be" stroke="#076678" stroke-width="2"/>
+<text x="670" y="430" font-size="14" font-weight="700" fill="#3c3836">gruvbox-light</text>
+<text x="670" y="450" font-size="11.5" fill="#a59d85">one palette → the whole desktop</text>
+<rect x="658" y="474" width="34" height="24" rx="4" fill="#fbf1c7" stroke="#dcd3af"/>
+<rect x="698" y="474" width="34" height="24" rx="4" fill="#efe5be" stroke="#dcd3af"/>
+<rect x="738" y="474" width="34" height="24" rx="4" fill="#d5c4a1" stroke="#dcd3af"/>
+<rect x="778" y="474" width="34" height="24" rx="4" fill="#a59d85" stroke="#dcd3af"/>
+<rect x="818" y="474" width="34" height="24" rx="4" fill="#3c3836" stroke="#dcd3af"/>
+<rect x="858" y="474" width="34" height="24" rx="4" fill="#076678" stroke="#dcd3af"/>
+<rect x="898" y="474" width="34" height="24" rx="4" fill="#054956" stroke="#dcd3af"/>
+<rect x="20" y="524" width="300" height="112" rx="8" fill="#1f1f28" stroke="#3d3c3f"/>
+<rect x="30" y="534" width="280" height="54" rx="5" fill="#2a2a30" stroke="#7e9cd8" stroke-width="2"/>
+<text x="42" y="556" font-size="14" font-weight="700" fill="#dcd7ba">kanagawa</text>
+<text x="42" y="576" font-size="11.5" fill="#747169">one palette → the whole desktop</text>
+<rect x="30" y="600" width="34" height="24" rx="4" fill="#1f1f28" stroke="#3d3c3f"/>
+<rect x="70" y="600" width="34" height="24" rx="4" fill="#2a2a30" stroke="#3d3c3f"/>
+<rect x="110" y="600" width="34" height="24" rx="4" fill="#2d4f67" stroke="#3d3c3f"/>
+<rect x="150" y="600" width="34" height="24" rx="4" fill="#747169" stroke="#3d3c3f"/>
+<rect x="190" y="600" width="34" height="24" rx="4" fill="#dcd7ba" stroke="#3d3c3f"/>
+<rect x="230" y="600" width="34" height="24" rx="4" fill="#7e9cd8" stroke="#3d3c3f"/>
+<rect x="270" y="600" width="34" height="24" rx="4" fill="#a4b9e3" stroke="#3d3c3f"/>
+<rect x="334" y="524" width="300" height="112" rx="8" fill="#000000" stroke="#00280a"/>
+<rect x="344" y="534" width="280" height="54" rx="5" fill="#000f03" stroke="#005f00" stroke-width="2"/>
+<text x="356" y="556" font-size="14" font-weight="700" fill="#00ff41">matrix</text>
+<text x="356" y="576" font-size="11.5" fill="#00721d">one palette → the whole desktop</text>
+<rect x="344" y="600" width="34" height="24" rx="4" fill="#000000" stroke="#00280a"/>
+<rect x="384" y="600" width="34" height="24" rx="4" fill="#000f03" stroke="#00280a"/>
+<rect x="424" y="600" width="34" height="24" rx="4" fill="#0f3d0f" stroke="#00280a"/>
+<rect x="464" y="600" width="34" height="24" rx="4" fill="#00721d" stroke="#00280a"/>
+<rect x="504" y="600" width="34" height="24" rx="4" fill="#00ff41" stroke="#00280a"/>
+<rect x="544" y="600" width="34" height="24" rx="4" fill="#005f00" stroke="#00280a"/>
+<rect x="584" y="600" width="34" height="24" rx="4" fill="#4c8f4c" stroke="#00280a"/>
+<rect x="648" y="524" width="300" height="112" rx="8" fill="#1e1e1e" stroke="#383938"/>
+<rect x="658" y="534" width="280" height="54" rx="5" fill="#282828" stroke="#819aff" stroke-width="2"/>
+<text x="670" y="556" font-size="14" font-weight="700" fill="#c5c8c6">monokai-dimmed</text>
+<text x="670" y="576" font-size="11.5" fill="#696a69">one palette → the whole desktop</text>
+<rect x="658" y="600" width="34" height="24" rx="4" fill="#1e1e1e" stroke="#383938"/>
+<rect x="698" y="600" width="34" height="24" rx="4" fill="#282828" stroke="#383938"/>
+<rect x="738" y="600" width="34" height="24" rx="4" fill="#676b71" stroke="#383938"/>
+<rect x="778" y="600" width="34" height="24" rx="4" fill="#696a69" stroke="#383938"/>
+<rect x="818" y="600" width="34" height="24" rx="4" fill="#c5c8c6" stroke="#383938"/>
+<rect x="858" y="600" width="34" height="24" rx="4" fill="#819aff" stroke="#383938"/>
+<rect x="898" y="600" width="34" height="24" rx="4" fill="#a6b8ff" stroke="#383938"/>
+<rect x="20" y="650" width="300" height="112" rx="8" fill="#272822" stroke="#484943"/>
+<rect x="30" y="660" width="280" height="54" rx="5" fill="#33342e" stroke="#a6e22e" stroke-width="2"/>
+<text x="42" y="682" font-size="14" font-weight="700" fill="#f8f8f2">monokai</text>
+<text x="42" y="702" font-size="11.5" fill="#85857f">one palette → the whole desktop</text>
+<rect x="30" y="726" width="34" height="24" rx="4" fill="#272822" stroke="#484943"/>
+<rect x="70" y="726" width="34" height="24" rx="4" fill="#33342e" stroke="#484943"/>
+<rect x="110" y="726" width="34" height="24" rx="4" fill="#49483e" stroke="#484943"/>
+<rect x="150" y="726" width="34" height="24" rx="4" fill="#85857f" stroke="#484943"/>
+<rect x="190" y="726" width="34" height="24" rx="4" fill="#f8f8f2" stroke="#484943"/>
+<rect x="230" y="726" width="34" height="24" rx="4" fill="#a6e22e" stroke="#484943"/>
+<rect x="270" y="726" width="34" height="24" rx="4" fill="#c0ea6c" stroke="#484943"/>
+<rect x="334" y="650" width="300" height="112" rx="8" fill="#2e3440" stroke="#494f5b"/>
+<rect x="344" y="660" width="280" height="54" rx="5" fill="#383e4a" stroke="#81a1c1" stroke-width="2"/>
+<text x="356" y="682" font-size="14" font-weight="700" fill="#d8dee9">nord</text>
+<text x="356" y="702" font-size="11.5" fill="#7a808c">one palette → the whole desktop</text>
+<rect x="344" y="726" width="34" height="24" rx="4" fill="#2e3440" stroke="#494f5b"/>
+<rect x="384" y="726" width="34" height="24" rx="4" fill="#383e4a" stroke="#494f5b"/>
+<rect x="424" y="726" width="34" height="24" rx="4" fill="#434c5e" stroke="#494f5b"/>
+<rect x="464" y="726" width="34" height="24" rx="4" fill="#7a808c" stroke="#494f5b"/>
+<rect x="504" y="726" width="34" height="24" rx="4" fill="#d8dee9" stroke="#494f5b"/>
+<rect x="544" y="726" width="34" height="24" rx="4" fill="#81a1c1" stroke="#494f5b"/>
+<rect x="584" y="726" width="34" height="24" rx="4" fill="#a6bdd3" stroke="#494f5b"/>
+<rect x="648" y="650" width="300" height="112" rx="8" fill="#282c34" stroke="#3c414a"/>
+<rect x="658" y="660" width="280" height="54" rx="5" fill="#2f343c" stroke="#61afef" stroke-width="2"/>
+<text x="670" y="682" font-size="14" font-weight="700" fill="#abb2bf">one-dark</text>
+<text x="670" y="702" font-size="11.5" fill="#626872">one palette → the whole desktop</text>
+<rect x="658" y="726" width="34" height="24" rx="4" fill="#282c34" stroke="#3c414a"/>
+<rect x="698" y="726" width="34" height="24" rx="4" fill="#2f343c" stroke="#3c414a"/>
+<rect x="738" y="726" width="34" height="24" rx="4" fill="#3e4451" stroke="#3c414a"/>
+<rect x="778" y="726" width="34" height="24" rx="4" fill="#626872" stroke="#3c414a"/>
+<rect x="818" y="726" width="34" height="24" rx="4" fill="#abb2bf" stroke="#3c414a"/>
+<rect x="858" y="726" width="34" height="24" rx="4" fill="#61afef" stroke="#3c414a"/>
+<rect x="898" y="726" width="34" height="24" rx="4" fill="#90c7f3" stroke="#3c414a"/>
+<rect x="20" y="776" width="300" height="112" rx="8" fill="#232136" stroke="#413f54"/>
+<rect x="30" y="786" width="280" height="54" rx="5" fill="#2e2c41" stroke="#9ccfd8" stroke-width="2"/>
+<text x="42" y="808" font-size="14" font-weight="700" fill="#e0def4">rose-pine-moon</text>
+<text x="42" y="828" font-size="11.5" fill="#78768b">one palette → the whole desktop</text>
+<rect x="30" y="852" width="34" height="24" rx="4" fill="#232136" stroke="#413f54"/>
+<rect x="70" y="852" width="34" height="24" rx="4" fill="#2e2c41" stroke="#413f54"/>
+<rect x="110" y="852" width="34" height="24" rx="4" fill="#44415a" stroke="#413f54"/>
+<rect x="150" y="852" width="34" height="24" rx="4" fill="#78768b" stroke="#413f54"/>
+<rect x="190" y="852" width="34" height="24" rx="4" fill="#e0def4" stroke="#413f54"/>
+<rect x="230" y="852" width="34" height="24" rx="4" fill="#9ccfd8" stroke="#413f54"/>
+<rect x="270" y="852" width="34" height="24" rx="4" fill="#b9dde3" stroke="#413f54"/>
+<rect x="334" y="776" width="300" height="112" rx="8" fill="#191724" stroke="#383645"/>
+<rect x="344" y="786" width="280" height="54" rx="5" fill="#242230" stroke="#9ccfd8" stroke-width="2"/>
+<text x="356" y="808" font-size="14" font-weight="700" fill="#e0def4">rose-pine</text>
+<text x="356" y="828" font-size="11.5" fill="#727081">one palette → the whole desktop</text>
+<rect x="344" y="852" width="34" height="24" rx="4" fill="#191724" stroke="#383645"/>
+<rect x="384" y="852" width="34" height="24" rx="4" fill="#242230" stroke="#383645"/>
+<rect x="424" y="852" width="34" height="24" rx="4" fill="#403d52" stroke="#383645"/>
+<rect x="464" y="852" width="34" height="24" rx="4" fill="#727081" stroke="#383645"/>
+<rect x="504" y="852" width="34" height="24" rx="4" fill="#e0def4" stroke="#383645"/>
+<rect x="544" y="852" width="34" height="24" rx="4" fill="#9ccfd8" stroke="#383645"/>
+<rect x="584" y="852" width="34" height="24" rx="4" fill="#b9dde3" stroke="#383645"/>
+<rect x="648" y="776" width="300" height="112" rx="8" fill="#002b36" stroke="#143b45"/>
+<rect x="658" y="786" width="280" height="54" rx="5" fill="#07313b" stroke="#268bd2" stroke-width="2"/>
+<text x="670" y="808" font-size="14" font-weight="700" fill="#839496">solarized-dark</text>
+<text x="670" y="828" font-size="11.5" fill="#3a5a61">one palette → the whole desktop</text>
+<rect x="658" y="852" width="34" height="24" rx="4" fill="#002b36" stroke="#143b45"/>
+<rect x="698" y="852" width="34" height="24" rx="4" fill="#07313b" stroke="#143b45"/>
+<rect x="738" y="852" width="34" height="24" rx="4" fill="#073642" stroke="#143b45"/>
+<rect x="778" y="852" width="34" height="24" rx="4" fill="#3a5a61" stroke="#143b45"/>
+<rect x="818" y="852" width="34" height="24" rx="4" fill="#839496" stroke="#143b45"/>
+<rect x="858" y="852" width="34" height="24" rx="4" fill="#268bd2" stroke="#143b45"/>
+<rect x="898" y="852" width="34" height="24" rx="4" fill="#67addf" stroke="#143b45"/>
+<rect x="20" y="902" width="300" height="112" rx="8" fill="#fdf6e3" stroke="#e4e2d3"/>
+<rect x="30" y="912" width="280" height="54" rx="5" fill="#f3eedd" stroke="#268bd2" stroke-width="2"/>
+<text x="42" y="934" font-size="14" font-weight="700" fill="#657b83">solarized-light</text>
+<text x="42" y="954" font-size="11.5" fill="#b8beb7">one palette → the whole desktop</text>
+<rect x="30" y="978" width="34" height="24" rx="4" fill="#fdf6e3" stroke="#e4e2d3"/>
+<rect x="70" y="978" width="34" height="24" rx="4" fill="#f3eedd" stroke="#e4e2d3"/>
+<rect x="110" y="978" width="34" height="24" rx="4" fill="#eee8d5" stroke="#e4e2d3"/>
+<rect x="150" y="978" width="34" height="24" rx="4" fill="#b8beb7" stroke="#e4e2d3"/>
+<rect x="190" y="978" width="34" height="24" rx="4" fill="#657b83" stroke="#e4e2d3"/>
+<rect x="230" y="978" width="34" height="24" rx="4" fill="#268bd2" stroke="#e4e2d3"/>
+<rect x="270" y="978" width="34" height="24" rx="4" fill="#1b6497" stroke="#e4e2d3"/>
+<rect x="334" y="902" width="300" height="112" rx="8" fill="#0a0a0a" stroke="#2a2a2a"/>
+<rect x="344" y="912" width="280" height="54" rx="5" fill="#161616" stroke="#8b0000" stroke-width="2"/>
+<text x="356" y="934" font-size="14" font-weight="700" fill="#d6d6d6">terminal-red</text>
+<text x="356" y="954" font-size="11.5" fill="#656565">one palette → the whole desktop</text>
+<rect x="344" y="978" width="34" height="24" rx="4" fill="#0a0a0a" stroke="#2a2a2a"/>
+<rect x="384" y="978" width="34" height="24" rx="4" fill="#161616" stroke="#2a2a2a"/>
+<rect x="424" y="978" width="34" height="24" rx="4" fill="#5a0000" stroke="#2a2a2a"/>
+<rect x="464" y="978" width="34" height="24" rx="4" fill="#656565" stroke="#2a2a2a"/>
+<rect x="504" y="978" width="34" height="24" rx="4" fill="#d6d6d6" stroke="#2a2a2a"/>
+<rect x="544" y="978" width="34" height="24" rx="4" fill="#8b0000" stroke="#2a2a2a"/>
+<rect x="584" y="978" width="34" height="24" rx="4" fill="#ad4c4c" stroke="#2a2a2a"/>
+<rect x="648" y="902" width="300" height="112" rx="8" fill="#24283b" stroke="#3c4158"/>
+<rect x="658" y="912" width="280" height="54" rx="5" fill="#2d3146" stroke="#7aa2f7" stroke-width="2"/>
+<text x="670" y="934" font-size="14" font-weight="700" fill="#c0caf5">tokyo-night-storm</text>
+<text x="670" y="954" font-size="11.5" fill="#6a708e">one palette → the whole desktop</text>
+<rect x="658" y="978" width="34" height="24" rx="4" fill="#24283b" stroke="#3c4158"/>
+<rect x="698" y="978" width="34" height="24" rx="4" fill="#2d3146" stroke="#3c4158"/>
+<rect x="738" y="978" width="34" height="24" rx="4" fill="#364a82" stroke="#3c4158"/>
+<rect x="778" y="978" width="34" height="24" rx="4" fill="#6a708e" stroke="#3c4158"/>
+<rect x="818" y="978" width="34" height="24" rx="4" fill="#c0caf5" stroke="#3c4158"/>
+<rect x="858" y="978" width="34" height="24" rx="4" fill="#7aa2f7" stroke="#3c4158"/>
+<rect x="898" y="978" width="34" height="24" rx="4" fill="#a1bdf9" stroke="#3c4158"/>
+<rect x="20" y="1028" width="300" height="112" rx="8" fill="#1a1b26" stroke="#343747"/>
+<rect x="30" y="1038" width="280" height="54" rx="5" fill="#232532" stroke="#7aa2f7" stroke-width="2"/>
+<text x="42" y="1060" font-size="14" font-weight="700" fill="#c0caf5">tokyo-night</text>
+<text x="42" y="1080" font-size="11.5" fill="#646983">one palette → the whole desktop</text>
+<rect x="30" y="1104" width="34" height="24" rx="4" fill="#1a1b26" stroke="#343747"/>
+<rect x="70" y="1104" width="34" height="24" rx="4" fill="#232532" stroke="#343747"/>
+<rect x="110" y="1104" width="34" height="24" rx="4" fill="#33467c" stroke="#343747"/>
+<rect x="150" y="1104" width="34" height="24" rx="4" fill="#646983" stroke="#343747"/>
+<rect x="190" y="1104" width="34" height="24" rx="4" fill="#c0caf5" stroke="#343747"/>
+<rect x="230" y="1104" width="34" height="24" rx="4" fill="#7aa2f7" stroke="#343747"/>
+<rect x="270" y="1104" width="34" height="24" rx="4" fill="#a1bdf9" stroke="#343747"/>
+<rect x="334" y="1028" width="300" height="112" rx="8" fill="#002451" stroke="#28476c"/>
+<rect x="344" y="1038" width="280" height="54" rx="5" fill="#0f315b" stroke="#bbdaff" stroke-width="2"/>
+<text x="356" y="1060" font-size="14" font-weight="700" fill="#ffffff">tomorrow-night-blue</text>
+<text x="356" y="1080" font-size="11.5" fill="#72869f">one palette → the whole desktop</text>
+<rect x="344" y="1104" width="34" height="24" rx="4" fill="#002451" stroke="#28476c"/>
+<rect x="384" y="1104" width="34" height="24" rx="4" fill="#0f315b" stroke="#28476c"/>
+<rect x="424" y="1104" width="34" height="24" rx="4" fill="#003f8e" stroke="#28476c"/>
+<rect x="464" y="1104" width="34" height="24" rx="4" fill="#72869f" stroke="#28476c"/>
+<rect x="504" y="1104" width="34" height="24" rx="4" fill="#ffffff" stroke="#28476c"/>
+<rect x="544" y="1104" width="34" height="24" rx="4" fill="#bbdaff" stroke="#28476c"/>
+<rect x="584" y="1104" width="34" height="24" rx="4" fill="#cfe5ff" stroke="#28476c"/>
+</svg>

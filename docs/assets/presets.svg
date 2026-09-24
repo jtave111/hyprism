@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1171 610" width="1171" height="610" role="img" aria-label="hyprism › presets" xml:space="preserve">
+<style>text{font-family:"JetBrains Mono","Fira Code","DejaVu Sans Mono",Menlo,Consolas,monospace;font-size:14.2px;white-space:pre}.b{font-weight:700}</style>
+<rect width="100%" height="100%" rx="10" fill="#0c0c0e"/>
+<rect x="0.5" y="0.5" width="1170" height="609" rx="10" fill="none" stroke="#2a2a2e"/>
+<rect x="1" y="1" width="1169" height="33" rx="9" fill="#141417"/>
+<rect x="1" y="24" width="1169" height="10" fill="#141417"/>
+<line x1="1" y1="34" x2="1170" y2="34" stroke="#2a2a2e"/>
+<circle cx="24" cy="17.0" r="6" fill="#ff5f57" opacity=".85"/>
+<circle cx="44" cy="17.0" r="6" fill="#febc2e" opacity=".85"/>
+<circle cx="64" cy="17.0" r="6" fill="#28c840" opacity=".85"/>
+<text x="586" y="22.0" text-anchor="middle" fill="#8a8a8a">hyprism › presets</text>
+<rect x="43.8" y="52.0" width="77.8" height="18.0" fill="#ff3b3b"/>
+<text x="18.0" y="65.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">╔═</text>
+<text x="43.8" y="65.3" fill="#000000" class="b" textLength="77.4" lengthAdjust="spacingAndGlyphs"> HYPRISM </text>
+<text x="129.8" y="65.3" fill="#5c5c5c" textLength="1023.4" lengthAdjust="spacingAndGlyphs">══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗</text>
+<text x="18.0" y="83.3" fill="#c8c8c8" textLength="1126.6" lengthAdjust="spacingAndGlyphs">║ ┌─────────────────────────────────────────────────────────────────┐╭───────────────────────────────────────────────────────────╮ </text>
+<text x="1144.6" y="83.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<rect x="1084.4" y="88.0" width="34.8" height="18.0" fill="#8a8a8a"/>
+<text x="18.0" y="101.3" fill="#c8c8c8" textLength="34.4" lengthAdjust="spacingAndGlyphs">║ │ </text>
+<text x="52.4" y="101.3" fill="#ff3b3b" class="b" textLength="68.8" lengthAdjust="spacingAndGlyphs">preset &gt;</text>
+<text x="551.2" y="101.3" fill="#8a8a8a" textLength="43.0" lengthAdjust="spacingAndGlyphs">12/12</text>
+<text x="602.8" y="101.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="101.3" fill="#c8c8c8" textLength="455.8" lengthAdjust="spacingAndGlyphs"># Glass — blur, soft shadows, rounded corners, floati</text>
+<text x="1084.4" y="101.3" fill="#0c0c0e" textLength="34.4" lengthAdjust="spacingAndGlyphs">1/27</text>
+<text x="1118.8" y="101.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="101.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="119.3" fill="#c8c8c8" textLength="610.6" lengthAdjust="spacingAndGlyphs">║ └─────────────────────────────────────────────────────────────────┘│ </text>
+<text x="628.6" y="119.3" fill="#c8c8c8" textLength="490.2" lengthAdjust="spacingAndGlyphs"># pt: Vidro — blur, sombras suaves, cantos arredondados, </text>
+<text x="1118.8" y="119.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="119.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="137.3" fill="#c8c8c8" textLength="51.6" lengthAdjust="spacingAndGlyphs">║     </text>
+<text x="69.6" y="137.3" fill="#8a8a8a" textLength="507.4" lengthAdjust="spacingAndGlyphs">★ built-in · ENTER applies (only the keys the preset lists)</text>
+<text x="611.4" y="137.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">│ </text>
+<text x="628.6" y="137.3" fill="#c8c8c8" textLength="197.8" lengthAdjust="spacingAndGlyphs">paleta=catppuccin-mocha</text>
+<text x="1118.8" y="137.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="137.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="155.3" fill="#c8c8c8" textLength="610.6" lengthAdjust="spacingAndGlyphs">║ ┌─────────────────────────────────────────────────────────────────┐│ </text>
+<text x="628.6" y="155.3" fill="#c8c8c8" textLength="120.4" lengthAdjust="spacingAndGlyphs">layout=dwindle</text>
+<text x="1118.8" y="155.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="155.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="173.3" fill="#c8c8c8" textLength="51.6" lengthAdjust="spacingAndGlyphs">║ │   </text>
+<text x="69.6" y="173.3" fill="#c8c8c8" textLength="524.6" lengthAdjust="spacingAndGlyphs">★ cozy-gruvbox         Cozy gruvbox — warm retro colors, gen…</text>
+<text x="602.8" y="173.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="173.3" fill="#c8c8c8" textLength="111.8" lengthAdjust="spacingAndGlyphs">float_all=nao</text>
+<text x="1118.8" y="173.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="173.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="191.3" fill="#c8c8c8" textLength="51.6" lengthAdjust="spacingAndGlyphs">║ │   </text>
+<text x="69.6" y="191.3" fill="#c8c8c8" textLength="524.6" lengthAdjust="spacingAndGlyphs">★ cyberpunk-neon       Cyberpunk neon — neon accents, elasti…</text>
+<text x="602.8" y="191.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="191.3" fill="#c8c8c8" textLength="68.8" lengthAdjust="spacingAndGlyphs">border=2</text>
+<text x="1118.8" y="191.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="191.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="209.3" fill="#c8c8c8" textLength="51.6" lengthAdjust="spacingAndGlyphs">║ │   </text>
+<text x="69.6" y="209.3" fill="#c8c8c8" textLength="524.6" lengthAdjust="spacingAndGlyphs">★ floating-desktop     Floating desktop — everything floats …</text>
+<text x="602.8" y="209.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="209.3" fill="#c8c8c8" textLength="94.6" lengthAdjust="spacingAndGlyphs">rounding=12</text>
+<text x="1118.8" y="209.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="209.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<rect x="52.4" y="214.0" width="542.2" height="18.0" fill="#ff3b3b"/>
+<text x="18.0" y="227.3" fill="#c8c8c8" textLength="34.4" lengthAdjust="spacingAndGlyphs">║ │ </text>
+<text x="52.4" y="227.3" fill="#000000" class="b" textLength="8.6" lengthAdjust="spacingAndGlyphs">▶</text>
+<text x="69.6" y="227.3" fill="#000000" class="b" textLength="524.6" lengthAdjust="spacingAndGlyphs">★ glass                Glass — blur, soft shadows, rounded c…</text>
+<text x="602.8" y="227.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="227.3" fill="#c8c8c8" textLength="77.4" lengthAdjust="spacingAndGlyphs">gaps_in=6</text>
+<text x="1118.8" y="227.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="227.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="245.3" fill="#c8c8c8" textLength="51.6" lengthAdjust="spacingAndGlyphs">║ │   </text>
+<text x="69.6" y="245.3" fill="#c8c8c8" textLength="524.6" lengthAdjust="spacingAndGlyphs">★ hacker-matrix        Hacker matrix — green on black, zero …</text>
+<text x="602.8" y="245.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="245.3" fill="#c8c8c8" textLength="94.6" lengthAdjust="spacingAndGlyphs">gaps_out=14</text>
+<text x="1118.8" y="245.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="245.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="263.3" fill="#c8c8c8" textLength="51.6" lengthAdjust="spacingAndGlyphs">║ │   </text>
+<text x="69.6" y="263.3" fill="#c8c8c8" textLength="524.6" lengthAdjust="spacingAndGlyphs">★ light-day            Light day — bright theme for daytime …</text>
+<text x="602.8" y="263.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="263.3" fill="#c8c8c8" textLength="60.2" lengthAdjust="spacingAndGlyphs">blur=on</text>
+<text x="1118.8" y="263.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="263.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="281.3" fill="#c8c8c8" textLength="51.6" lengthAdjust="spacingAndGlyphs">║ │   </text>
+<text x="69.6" y="281.3" fill="#c8c8c8" textLength="524.6" lengthAdjust="spacingAndGlyphs">★ nord-calm            Nord calm — cool arctic tones, clean …</text>
+<text x="602.8" y="281.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="281.3" fill="#c8c8c8" textLength="94.6" lengthAdjust="spacingAndGlyphs">blur_size=8</text>
+<text x="1118.8" y="281.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="281.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="299.3" fill="#c8c8c8" textLength="51.6" lengthAdjust="spacingAndGlyphs">║ │   </text>
+<text x="69.6" y="299.3" fill="#c8c8c8" textLength="524.6" lengthAdjust="spacingAndGlyphs">★ performance          Performance — no animations, blur or …</text>
+<text x="602.8" y="299.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="299.3" fill="#c8c8c8" textLength="111.8" lengthAdjust="spacingAndGlyphs">blur_passes=3</text>
+<text x="1118.8" y="299.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="299.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="317.3" fill="#c8c8c8" textLength="51.6" lengthAdjust="spacingAndGlyphs">║ │   </text>
+<text x="69.6" y="317.3" fill="#c8c8c8" textLength="524.6" lengthAdjust="spacingAndGlyphs">★ retro-terminal       Retro terminal — hard edges, no gaps,…</text>
+<text x="602.8" y="317.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="317.3" fill="#c8c8c8" textLength="154.8" lengthAdjust="spacingAndGlyphs">blur_vibrancy=0.25</text>
+<text x="1118.8" y="317.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="317.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="335.3" fill="#c8c8c8" textLength="51.6" lengthAdjust="spacingAndGlyphs">║ │   </text>
+<text x="69.6" y="335.3" fill="#c8c8c8" textLength="524.6" lengthAdjust="spacingAndGlyphs">★ rose-pine-soft       Rosé Pine soft — muted pastel palette…</text>
+<text x="602.8" y="335.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="335.3" fill="#c8c8c8" textLength="77.4" lengthAdjust="spacingAndGlyphs">shadow=on</text>
+<text x="1118.8" y="335.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="335.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="353.3" fill="#c8c8c8" textLength="51.6" lengthAdjust="spacingAndGlyphs">║ │   </text>
+<text x="69.6" y="353.3" fill="#c8c8c8" textLength="524.6" lengthAdjust="spacingAndGlyphs">★ tiling-minimal       Tiling minimal — pure tiling, thin bo…</text>
+<text x="602.8" y="353.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="353.3" fill="#c8c8c8" textLength="129.0" lengthAdjust="spacingAndGlyphs">shadow_range=20</text>
+<text x="1118.8" y="353.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="353.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="371.3" fill="#c8c8c8" textLength="51.6" lengthAdjust="spacingAndGlyphs">║ │   </text>
+<text x="69.6" y="371.3" fill="#c8c8c8" textLength="524.6" lengthAdjust="spacingAndGlyphs">★ tokyo-night          Tokyo night — deep blue night palette…</text>
+<text x="602.8" y="371.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="371.3" fill="#c8c8c8" textLength="103.2" lengthAdjust="spacingAndGlyphs">active_op=96</text>
+<text x="1118.8" y="371.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="371.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="389.3" fill="#c8c8c8" textLength="584.8" lengthAdjust="spacingAndGlyphs">║ │                                                                 </text>
+<text x="602.8" y="389.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="389.3" fill="#c8c8c8" textLength="120.4" lengthAdjust="spacingAndGlyphs">inactive_op=88</text>
+<text x="1118.8" y="389.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="389.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="407.3" fill="#c8c8c8" textLength="584.8" lengthAdjust="spacingAndGlyphs">║ │                                                                 </text>
+<text x="602.8" y="407.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="407.3" fill="#c8c8c8" textLength="86.0" lengthAdjust="spacingAndGlyphs">anim=suave</text>
+<text x="1118.8" y="407.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="407.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="425.3" fill="#c8c8c8" textLength="584.8" lengthAdjust="spacingAndGlyphs">║ │                                                                 </text>
+<text x="602.8" y="425.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="425.3" fill="#c8c8c8" textLength="129.0" lengthAdjust="spacingAndGlyphs">bar_style=pills</text>
+<text x="1118.8" y="425.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="425.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="443.3" fill="#c8c8c8" textLength="584.8" lengthAdjust="spacingAndGlyphs">║ │                                                                 </text>
+<text x="602.8" y="443.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="443.3" fill="#c8c8c8" textLength="103.2" lengthAdjust="spacingAndGlyphs">bar_margin=8</text>
+<text x="1118.8" y="443.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="443.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="461.3" fill="#c8c8c8" textLength="584.8" lengthAdjust="spacingAndGlyphs">║ │                                                                 </text>
+<text x="602.8" y="461.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="461.3" fill="#c8c8c8" textLength="111.8" lengthAdjust="spacingAndGlyphs">bar_radius=14</text>
+<text x="1118.8" y="461.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="461.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="479.3" fill="#c8c8c8" textLength="584.8" lengthAdjust="spacingAndGlyphs">║ │                                                                 </text>
+<text x="602.8" y="479.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="479.3" fill="#c8c8c8" textLength="77.4" lengthAdjust="spacingAndGlyphs">bar_gap=4</text>
+<text x="1118.8" y="479.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="479.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="497.3" fill="#c8c8c8" textLength="584.8" lengthAdjust="spacingAndGlyphs">║ │                                                                 </text>
+<text x="602.8" y="497.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="497.3" fill="#c8c8c8" textLength="60.2" lengthAdjust="spacingAndGlyphs">barh=34</text>
+<text x="1118.8" y="497.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="497.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="515.3" fill="#c8c8c8" textLength="584.8" lengthAdjust="spacingAndGlyphs">║ │                                                                 </text>
+<text x="602.8" y="515.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="515.3" fill="#c8c8c8" textLength="86.0" lengthAdjust="spacingAndGlyphs">barpos=top</text>
+<text x="1118.8" y="515.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="515.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="533.3" fill="#c8c8c8" textLength="584.8" lengthAdjust="spacingAndGlyphs">║ │                                                                 </text>
+<text x="602.8" y="533.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="533.3" fill="#c8c8c8" textLength="146.2" lengthAdjust="spacingAndGlyphs">bar_workspaces=on</text>
+<text x="1118.8" y="533.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs">█│</text>
+<text x="1144.6" y="533.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="551.3" fill="#c8c8c8" textLength="584.8" lengthAdjust="spacingAndGlyphs">║ │                                                                 </text>
+<text x="602.8" y="551.3" fill="#5c5c5c" textLength="25.8" lengthAdjust="spacingAndGlyphs">││ </text>
+<text x="628.6" y="551.3" fill="#c8c8c8" textLength="180.6" lengthAdjust="spacingAndGlyphs">lock_field_style=pill</text>
+<text x="1118.8" y="551.3" fill="#5c5c5c" textLength="17.2" lengthAdjust="spacingAndGlyphs"> │</text>
+<text x="1144.6" y="551.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="569.3" fill="#c8c8c8" textLength="1126.6" lengthAdjust="spacingAndGlyphs">║ └─────────────────────────────────────────────────────────────────┘╰───────────────────────────────────────────────────────────╯ </text>
+<text x="1144.6" y="569.3" fill="#5c5c5c" textLength="8.6" lengthAdjust="spacingAndGlyphs">║</text>
+<text x="18.0" y="587.3" fill="#c8c8c8" textLength="1135.2" lengthAdjust="spacingAndGlyphs">╚══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝</text>
+</svg>
