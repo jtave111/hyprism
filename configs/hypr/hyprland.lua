@@ -110,6 +110,12 @@ hl.monitor({ output = "", mode = "highrr", position = "auto", scale = "auto" })
 --------------------
 ---- ENVIRONMENT ---
 --------------------
+-- Hyprism's programs live in ~/.local/bin, which a fresh login session does
+-- not have on PATH: without this, launcher/power/settings binds find nothing.
+local path = os.getenv("PATH") or "/usr/local/bin:/usr/bin"
+if not path:find(HOME .. "/.local/bin", 1, true) then
+    hl.env("PATH", HOME .. "/.local/bin:" .. path)
+end
 hl.env("XCURSOR_THEME", L.cursor_theme)
 hl.env("XCURSOR_SIZE", tostring(L.cursor_size))
 hl.env("HYPRCURSOR_THEME", L.cursor_theme)
