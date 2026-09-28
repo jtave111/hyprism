@@ -256,6 +256,16 @@ done
 for l in "$BIN"/*; do
   [ -L "$l" ] && [ ! -e "$l" ] && case "$(readlink "$l")" in "$REPO"/*) run rm -f "$l"; info "$(L 'link antigo removido' 'stale link removed'): $(basename "$l")" ;; esac
 done
+# VirtualBox (VMSVGA) / VMware: Hyprland rejects kitty's GL buffers, so kitty
+# gets a software-rendering shim ahead of /usr/bin (the session PATH starts
+# with ~/.local/bin). --uninstall drops it with the other links.
+if want terminal && grep -qs '^vmwgfx ' /proc/modules; then
+  if [ ! -L "$BIN/kitty" ] || [ "$(readlink -f "$BIN/kitty")" != "$(readlink -f "$REPO/share/vm/kitty")" ]; then
+    [ -e "$BIN/kitty" ] || [ -L "$BIN/kitty" ] && backup_path "$BIN/kitty"
+    run ln -s "$REPO/share/vm/kitty" "$BIN/kitty"; record "link $BIN/kitty"
+  fi
+  info "$(L 'VM (vmwgfx) detectada: kitty renderiza por software' 'VM (vmwgfx) detected: kitty renders in software')"
+fi
 ok "$(L 'links em' 'links in') ~/.local/bin → $REPO/bin"
 
 title "$(L 'Dados' 'Data')"

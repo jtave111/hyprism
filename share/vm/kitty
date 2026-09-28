@@ -1,0 +1,6 @@
+#!/bin/sh
+# Linked as ~/.local/bin/kitty by install.sh only on VMs that use the vmwgfx
+# driver (VirtualBox VMSVGA, VMware): Hyprland rejects kitty's GL buffers
+# there and the window never shows up, so kitty renders in software instead.
+export LIBGL_ALWAYS_SOFTWARE=1
+exec /usr/bin/kitty "$@"
