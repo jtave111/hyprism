@@ -85,18 +85,6 @@ cd ~/dev/hyprism
 
 > **Safe by design.** Every config the installer replaces is moved to `~/.config/hyprism/backups/install-<date>/` first, and every change is written to a manifest so `--uninstall` can put things back. Programs are symlinked into `~/.local/bin`, so a `git pull` updates Hyprism in place. If you already have your own `hyprland.lua`, it stays; Hyprism's is saved next to it as an example.
 
-### Try it in a virtual machine
-
-Boot the Arch ISO in VirtualBox, QEMU/KVM or VMware and run, as root in the live console:
-
-```bash
-loadkeys br-abnt2   # only for ABNT2 keyboards
-curl -fsSLo i.sh https://raw.githubusercontent.com/jtave111/hyprism/main/tools/vm-install-arch.sh
-bash i.sh
-```
-
-It installs Arch + Hyprland + SDDM + the guest tools (UEFI or BIOS), clones Hyprism to `~/dev/hyprism` and refuses to run outside a VM. Afterwards give the VM **3D acceleration and 128 MB of video memory**, log in, and run `./install.sh`.
-
 ## Palettes and presets
 
 <p align="center"><img src="docs/assets/palettes.svg" alt="The 26 Hyprism palettes" width="100%"></p>
