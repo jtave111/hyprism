@@ -105,7 +105,9 @@ end)()
 for _, m in ipairs(monitors) do
     if type(m) == "table" and m.output then hl.monitor(m) end
 end
-hl.monitor({ output = "", mode = "highrr", position = "auto", scale = "auto" })
+-- VMs advertise a tiny mode (800x600@60.3) as the "highest refresh", so they
+-- follow the window size instead.
+hl.monitor({ output = "", mode = IS_VM and "preferred" or "highrr", position = "auto", scale = IS_VM and 1 or "auto" })
 
 --------------------
 ---- ENVIRONMENT ---
