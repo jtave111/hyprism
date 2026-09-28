@@ -134,6 +134,12 @@ return function(opts)
     local greeted  = {}   -- [address] = true: the VM mode hint was already shown for it
     local forced   = false -- VM mode switched on by hand (manual mode, or a non-VM window)
 
+    -- window address as a table key; nil when the window is already gone
+    local function key(w)
+        local ok, a = pcall(function() return w and w.address end)
+        if ok and a and a ~= "" then return a end
+    end
+
     local function active() return hl.get_current_submap() == SUBMAP end
     local function enter() if not active() then hl.dispatch(hl.dsp.submap(SUBMAP)) end end
     local function leave() if active() then hl.dispatch(hl.dsp.submap("reset")) end end
@@ -141,10 +147,11 @@ return function(opts)
     -- auto mode: VM mode exactly while a VM window that was not released has focus
     local function sync(w)
         if mode ~= "auto" or forced then return end
-        if is_vm(w) and not released[w.address] then
+        local a = key(w)
+        if a and is_vm(w) and not released[a] then
             if not active() then
                 enter()
-                if not greeted[w.address] then greeted[w.address] = true; say("on") end
+                if not greeted[a] then greeted[a] = true; say("on") end
             end
         else
             leave()
@@ -153,15 +160,16 @@ return function(opts)
 
     local function toggle()
         local w = hl.get_active_window()
+        local a = key(w)
         if active() then
-            if mode == "auto" and is_vm(w) then released[w.address] = true end
+            if mode == "auto" and a and is_vm(w) then released[a] = true end
             forced = false
             leave()
             say("off")
         else
-            if mode == "auto" and is_vm(w) then
-                released[w.address] = nil
-                greeted[w.address] = true
+            if mode == "auto" and a and is_vm(w) then
+                released[a] = nil
+                greeted[a] = true
             else
                 forced = true
             end
@@ -183,8 +191,10 @@ return function(opts)
         hl.on("window.active", function(w) sync(w) end)
         -- switching to an empty workspace leaves no window to report
         hl.on("workspace.active", function() sync(hl.get_active_window()) end)
+        -- a destroyed window may no longer report its address (or raise on access)
         hl.on("window.destroy", function(w)
-            if w then released[w.address] = nil; greeted[w.address] = nil end
+            local a = key(w)
+            if a then released[a] = nil; greeted[a] = nil end
         end)
     end
 end
