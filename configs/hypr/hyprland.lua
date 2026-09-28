@@ -75,6 +75,22 @@ local WORKSPACE_COUNT = math.max(1, math.min(10,
 
 local function rgba(hex) return "rgba(" .. hex:gsub("#", "") .. "ff)" end
 
+-- Virtual machines (VirtualBox, QEMU/KVM, VMware) often draw no hardware
+-- cursor: detect them and fall back to a software cursor.
+local IS_VM = (function()
+    for _, f in ipairs({ "/sys/class/dmi/id/sys_vendor", "/sys/class/dmi/id/product_name" }) do
+        local h = io.open(f, "r")
+        if h then
+            local s = (h:read("*l") or ""):lower()
+            h:close()
+            for _, k in ipairs({ "innotek", "virtualbox", "qemu", "kvm", "vmware" }) do
+                if s:find(k, 1, true) then return true end
+            end
+        end
+    end
+    return false
+end)()
+
 -----------------
 ---- DISPLAYS ---
 -----------------
@@ -195,6 +211,7 @@ hl.config({
         sync_gsettings_theme = true,
         hide_on_key_press    = L.cursor_hide_key,
         inactive_timeout     = L.cursor_timeout,
+        no_hardware_cursors  = IS_VM and 1 or nil,
     },
 
     animations = {
