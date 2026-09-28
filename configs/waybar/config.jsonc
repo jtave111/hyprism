@@ -11,7 +11,7 @@
   "height": 32,
   "spacing": 0,
 
-  "modules-left": ["custom/launcher", "hyprland/workspaces", "hyprland/window"],
+  "modules-left": ["custom/launcher", "hyprland/workspaces", "hyprland/submap", "hyprland/window"],
   "modules-center": ["custom/media"],
   "modules-right": ["hyprland/language", "idle_inhibitor", "cpu", "memory", "disk", "pulseaudio", "network", "battery", "clock", "custom/power"],
 
@@ -26,6 +26,11 @@
     "format": "{id}",
     "on-click": "activate",
     "sort-by-number": true
+  },
+
+  "hyprland/submap": {
+    "format": "󰍹 {}",
+    "tooltip": false
   },
 
   "hyprland/window": {

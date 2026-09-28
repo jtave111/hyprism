@@ -495,3 +495,13 @@ hl.window_rule({ name = "utilities-float", match = { class = "^(pavucontrol|nm-c
 
 -- Hyprism windows (visualconf, hyprism-settings, SUPER+I terminal items)
 hl.window_rule({ name = "hyprism-center", match = { class = "^(hyprism-center)$" }, float = true, size = "1100 700" })
+
+-----------------
+---- VM MODE ----
+-----------------
+-- A focused VM window gets every shortcut; SUPER+ALT+P hands them back.
+-- Details and options in ~/.config/hypr/vm-mode.lua.
+do
+    local ok, vm = pcall(dofile, HOME .. "/.config/hypr/vm-mode.lua")
+    if ok and type(vm) == "function" then vm({ mod = mod }) end
+end

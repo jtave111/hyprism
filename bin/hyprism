@@ -583,6 +583,7 @@ load_pt(){ PT=(
   ['window border width']='espessura da borda da janela'
   ['window size']='tamanho da janela'
   ['window, sound, network, battery and clock']='janela, som, rede, bateria e relogio'
+  ['VM mode indicator']='indicador do modo VM'
   ['window title']='titulo da janela'
   ['workspace layout']='layout das areas'
   ['workspaces']='workspaces'
@@ -925,7 +926,7 @@ seed(){
   # Current bar modules. The first two stay off to preserve the look without
   # a launcher/workspace number. Battery/backlight default on only when the
   # hardware exists.
-  def bar_launcher off; def bar_workspaces off; def bar_window on
+  def bar_launcher off; def bar_workspaces off; def bar_window on; def bar_vm on
   def bar_media on;     def bar_language on;     def bar_idle on
   def bar_temperature on; def bar_disk on;       def bar_memory on
   def bar_cpu on;       defl bar_backlight hw_backlight_default; def bar_audio on
@@ -1174,7 +1175,7 @@ EOF
   flat) cat <<EOF
 window#waybar { background: @bg; color: @fg; border-${edge}: 1px solid @accent; }
 
-#custom-launcher, #workspaces, #window, #tray, #pulseaudio, #network,
+#custom-launcher, #workspaces, #window, #submap, #tray, #pulseaudio, #network,
 #cpu, #memory, #backlight, #battery, #clock, #temperature, #disk,
 #language, #idle_inhibitor, #custom-media, #custom-power {
     background: transparent; padding: 0 9px; margin: 0; color: @dim;
@@ -1210,6 +1211,7 @@ window#waybar { background: @bg; color: @fg; border-${edge}: 1px solid @accent; 
 #workspaces button:hover { background: @bg2; color: @fg; border-bottom: 2px solid @line; }
 
 #window { color: @fg; padding: 0 12px; }
+#submap { color: @accent; font-weight: bold; }
 #tray { background: @bg2; padding: 0 8px; }
 #tray menu { background: @bg2; color: @fg; }
 #pulseaudio:hover, #network:hover, #cpu:hover, #memory:hover, #backlight:hover { color: @lit; }
@@ -1227,7 +1229,7 @@ EOF
    from the transparent window + a taller bar (set by bar_style_set) showing the
    wallpaper around the chips; side margin insets from the screen edges. */
 window#waybar { background: transparent; color: @fg; margin: 0 ${margin}px; }
-#custom-launcher, #window, #custom-media, #language, #idle_inhibitor,
+#custom-launcher, #window, #submap, #custom-media, #language, #idle_inhibitor,
 #temperature, #disk, #memory, #cpu, #backlight, #pulseaudio, #network,
 #tray, #battery, #clock, #custom-power {
     background: @bg2; color: @dim;
@@ -1240,6 +1242,7 @@ window#waybar { background: transparent; color: @fg; margin: 0 ${margin}px; }
 #custom-launcher { color: @accent; background: @sel; padding: 0 12px; }
 #custom-power { color: @accent; }
 #window { color: @fg; }
+#submap { color: @accent; font-weight: bold; }
 #custom-media { color: @lit; font-style: italic; padding: 0 14px; }
 #language:hover, #idle_inhibitor:hover, #temperature:hover, #disk:hover,
 #memory:hover, #cpu:hover, #backlight:hover, #pulseaudio:hover, #network:hover,
@@ -1262,7 +1265,7 @@ window#waybar { background: @bg; color: @fg; border-${edge}: 1px solid @accent; 
 .modules-left, .modules-center, .modules-right {
     background: @bg2; border-radius: ${radius}px; margin: 4px ${gap}px; padding: 0 4px;
 }
-#custom-launcher, #window, #custom-media, #language, #idle_inhibitor,
+#custom-launcher, #window, #submap, #custom-media, #language, #idle_inhibitor,
 #temperature, #disk, #memory, #cpu, #backlight, #pulseaudio, #network,
 #tray, #battery, #clock, #custom-power, #workspaces button {
     background: transparent; color: @dim; padding: 0 9px;
@@ -1270,6 +1273,7 @@ window#waybar { background: @bg; color: @fg; border-${edge}: 1px solid @accent; 
 #custom-launcher { color: @accent; }
 #custom-power { color: @accent; }
 #window { color: @fg; padding: 0 12px; }
+#submap { color: @accent; font-weight: bold; }
 #custom-media { color: @lit; font-style: italic; }
 #clock { color: @fg; }
 /* internal separators, discreet */
@@ -1313,7 +1317,7 @@ gen_waybar_layout(){
   [ -f "$cfg" ] || return 0
   left=$(waybar_list \
     bar_launcher custom/launcher bar_workspaces hyprland/workspaces \
-    bar_window hyprland/window)
+    bar_vm hyprland/submap bar_window hyprland/window)
   center=$(waybar_list bar_media custom/media)
   right=$(waybar_list \
     bar_language hyprland/language bar_idle idle_inhibitor \
@@ -2497,7 +2501,7 @@ pick_barra(){
 }
 
 bar_module_keys(){
-  printf '%s\n' bar_launcher bar_workspaces bar_window bar_media bar_language \
+  printf '%s\n' bar_launcher bar_workspaces bar_vm bar_window bar_media bar_language \
     bar_idle bar_temperature bar_disk bar_memory bar_cpu bar_backlight \
     bar_audio bar_network bar_tray bar_battery bar_clock bar_power
 }
@@ -2512,11 +2516,11 @@ bar_preset(){
   bar_all off
   case "$preset" in
     minimo)
-      sset bar_window on; sset bar_audio on; sset bar_network on
+      sset bar_window on; sset bar_vm on; sset bar_audio on; sset bar_network on
       sset bar_clock on; sset bar_power on
       ;;
     equilibrado)
-      sset bar_window on; sset bar_media on; sset bar_language on
+      sset bar_window on; sset bar_vm on; sset bar_media on; sset bar_language on
       sset bar_idle on; sset bar_temperature on; sset bar_disk on
       sset bar_memory on; sset bar_cpu on
       sset bar_audio on; sset bar_network on
@@ -2551,6 +2555,7 @@ pick_modulos(){
       "preset       $(t 'choose minimal, balanced or full')" \
       "launcher     [$(bar_mark bar_launcher)] $(t 'search button')" \
       "workspaces   [$(bar_mark bar_workspaces)] $(t 'workspaces')" \
+      "vm           [$(bar_mark bar_vm)] $(t 'VM mode indicator')" \
       "window       [$(bar_mark bar_window)] $(t 'window title')" \
       "media        [$(bar_mark bar_media)] $(t 'now playing')" \
       "language     [$(bar_mark bar_language)] $(t 'keyboard language')" \
@@ -2579,7 +2584,7 @@ pick_modulos(){
         [ -n "${p:-}" ] && bar_preset "$(mkey "$p")"
         ;;
       launcher) key=bar_launcher;; workspaces) key=bar_workspaces;;
-      window) key=bar_window;; media) key=bar_media;; language) key=bar_language;;
+      vm) key=bar_vm;; window) key=bar_window;; media) key=bar_media;; language) key=bar_language;;
       idle) key=bar_idle;; temperature) key=bar_temperature;; disk) key=bar_disk;;
       memory) key=bar_memory;; cpu) key=bar_cpu;; backlight) key=bar_backlight;;
       audio) key=bar_audio;; network) key=bar_network;; tray) key=bar_tray;;

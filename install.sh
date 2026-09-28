@@ -315,6 +315,7 @@ if want hyprland; then
   else
     deploy "$REPO/configs/hypr/hyprland.lua" "$CFG/hypr/hyprland.lua"
   fi
+  deploy "$REPO/configs/hypr/vm-mode.lua" "$CFG/hypr/vm-mode.lua"
 fi
 
 if want waybar; then
