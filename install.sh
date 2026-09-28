@@ -274,7 +274,10 @@ want launcher && [ -f "$REPO/share/rofi/wifi.rasi" ] && [ ! -e "$CFG/rofi/wifi.r
 want launcher && [ -f "$REPO/share/rofi/config.rasi" ] && [ ! -e "$CFG/rofi/config.rasi" ] && run cp "$REPO/share/rofi/config.rasi" "$CFG/rofi/config.rasi"
 
 # a wallpaper folder and a default wallpaper, so the first login is not black
-WALLDIR="$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")/wallpaper"
+# (same lookup as bin/hyprism: xdg-user-dir answers $HOME when no user-dirs exist)
+PICS=$(xdg-user-dir PICTURES 2>/dev/null)
+{ [ -z "$PICS" ] || [ "$PICS" = "$HOME" ]; } && PICS="$HOME/Pictures"
+WALLDIR="$PICS/wallpaper"
 [ -d "$HOME/Pictures/wallpaper" ] && WALLDIR="$HOME/Pictures/wallpaper"
 run mkdir -p "$WALLDIR"
 if [ -z "$(ls -A "$WALLDIR" 2>/dev/null)" ] && have magick; then
